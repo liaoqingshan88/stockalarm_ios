@@ -1,0 +1,51 @@
+package alarm.stock;
+
+import java.util.Calendar;
+
+public class StockTime {
+
+	static int hour, minute, second, WeekOfYear;
+    static String[] week = {"日", "一", "二", "三", "四", "五", "六", };
+	private static  void getTime() {
+		Calendar ca = Calendar.getInstance();
+		hour=ca.get(Calendar.HOUR_OF_DAY);//小时
+		minute=ca.get(Calendar.MINUTE);//分
+		second=ca.get(Calendar.SECOND);//秒
+		WeekOfYear = ca.get(Calendar.DAY_OF_WEEK);
+		WeekOfYear --;//from 0 to 6
+		//hour += 12;
+	}
+
+	public static String GetTime() {
+		getTime();
+		return "星期"+ week[WeekOfYear] + " " + hour +":"+minute+":"+second ;
+	}
+
+	public static boolean IsTradeTime() {
+		getTime();
+
+		if( WeekOfYear >= 1&& WeekOfYear<=5 ) {
+			int curSecond = GetSecond(hour, minute, second);
+
+			if(     ( curSecond >= GetSecond(9,30,0) && curSecond <= GetSecond(11,30,0)  )
+					||  ( curSecond >= GetSecond(13,00,0) && curSecond <= GetSecond(15,0,0) )
+			  ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+
+	static int GetSecond(int hour, int minute, int second) {
+		return hour* 3600 + minute * 60 + second;
+	}
+
+	public static int GetCurTime()
+	{
+		getTime();
+		return hour* 3600 + minute * 60 + second;
+	}
+
+}

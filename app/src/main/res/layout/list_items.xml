@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/RelativeLayout01"
+    android:layout_width="fill_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:padding="8dp"
+    android:background="#FFFFFF"
+    android:layout_marginLeft="4dp"
+    android:layout_marginRight="4dp"
+    android:layout_marginTop="2dp"
+    android:layout_marginBottom="2dp"
+    android:gravity="center_vertical">
+
+    <!-- 股票名称 -->
+    <TextView
+        android:id="@+id/list_name"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1.2"
+        android:text="name"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        android:textColor="#000000"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:paddingRight="4dp" />
+    
+    <!-- 现价 -->
+    <TextView
+        android:id="@+id/list_price_now"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="0.8"
+        android:text="price"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:textColor="#000000"
+        android:gravity="right"
+        android:paddingRight="4dp" />
+
+    <!-- 当前涨幅（相对昨收） -->
+    <TextView
+        android:id="@+id/list_change_now"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="0.7"
+        android:text="chg"
+        android:textSize="13sp"
+        android:textColor="#000000"
+        android:textStyle="bold"
+        android:gravity="right"
+        android:paddingRight="4dp" />
+    
+    <!-- 最高价 -->
+    <TextView
+        android:id="@+id/list_high"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="0.7"
+        android:text="high"
+        android:textSize="13sp"
+        android:textColor="#000000"
+        android:gravity="right"
+        android:paddingRight="4dp" />
+    
+    <!-- 最低价 -->
+    <TextView
+        android:id="@+id/list_low"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="0.7"
+        android:text="low"
+        android:textSize="13sp"
+        android:textColor="#000000"
+        android:gravity="right"
+        android:paddingRight="4dp" />
+    
+    <!-- 涨幅 -->
+    <TextView
+        android:id="@+id/list_rise"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="0.6"
+        android:text="rise"
+        android:textSize="13sp"
+        android:textColor="#000000"
+        android:textStyle="bold"
+        android:gravity="right"
+        android:paddingRight="4dp" />
+    
+    <!-- 跌幅 -->
+    <TextView
+        android:id="@+id/list_drop"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="0.6"
+        android:text="drop"
+        android:textSize="13sp"
+        android:textColor="#000000"
+        android:textStyle="bold"
+        android:gravity="right" />
+
+</LinearLayout>

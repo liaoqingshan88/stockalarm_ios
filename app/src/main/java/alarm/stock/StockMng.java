@@ -1,0 +1,299 @@
+package alarm.stock;
+
+import java.util.ArrayList;
+//import java.util.Collection;
+import java.util.List;
+
+//add by ipdiy for sqlite
+import static alarm.stock.Constants.*;
+//import static alarm.stock.StockSQLite.*;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+import android.content.ContentValues;
+
+//import static alarm.stock.Constants.*;
+//import android.content.ContentValues;
+//import android.R.string;
+
+//import alarm.stock.SinaStockInfo.*;
+import alarm.stock.SinaStockInfo.ParseStockInfoException;
+
+public class StockMng {
+	//*
+	private static String[] FROM= {_ID,F_CODE,F_NAME,F_PRICE_H, F_PRICE_L, F_RISE, F_DROP, F_VALID};
+
+	private static String ORDER_BY = _ID;
+
+	//private SinaStockClient mClient;
+
+	private StockSQLite m_sqlite;
+
+	private String m_code;
+	private String m_name;
+	private float m_price_h;
+	private float m_price_l;
+	private int m_rise;
+	private int m_drop;
+	private boolean m_valid;
+
+	private String cmp_result;
+
+	String GetCode() {
+		return m_code;
+	}
+
+	String GetName() {
+		return m_name;
+	}
+	Float GetHigh() {
+		return m_price_h;
+	}
+	Float GetLow() {
+		return m_price_l;
+	}
+	int GetRise() {
+		return m_rise;
+	}
+	int GetDrop() {
+		return m_drop;
+	}
+	boolean IsValid() {
+		return m_valid;
+	}
+	//cons
+	StockMng(StockSQLite sqlite) {
+		m_sqlite = sqlite;
+		cmp_result = "";
+	}
+
+	private void AddToSqlite() throws ExceptionAddStock {
+		Cursor cursor = getItem(m_code);
+
+		if( cursor.moveToNext() ) {
+			throw new ExceptionAddStock();
+		}
+
+		addItem(m_code,m_name, m_price_h, m_price_l, m_rise, m_drop, m_valid);
+		cursor.close();
+	}
+
+
+	public void Set(String code, String name, float high, float low, int rise, int drop, boolean valid) {
+		m_code = code;
+		m_name = name;
+		m_price_h = high;
+		m_price_l = low;
+		m_rise = rise;
+		m_drop = drop;
+		m_valid = valid;
+	}
+
+	public void Add() throws ExceptionAddStock,ParseStockInfoException {
+		AddToSqlite();
+	}
+
+	public int Compare(float price_cur, float price_yesterday) {
+		int result = CMP_RESULT_NONE;
+
+		if( price_cur < 0.0000001 ) {
+			return result;//刚开盘时有的股价为0.
+		}
+
+		if( price_cur > m_price_h && m_price_h > 0) {
+			result |= CMP_RESULT_PRICE_H;
+			cmp_result += "高于设定值:"+m_price_h;
+		}
+
+		if( price_cur < m_price_l && m_price_l > 0 ) {
+			result |= CMP_RESULT_PRICE_L;
+			cmp_result += "低于设定值:"+m_price_l;
+		}
+
+		if( result != CMP_RESULT_NONE) {
+			cmp_result = "现价:"+price_cur + cmp_result;
+		}
+
+		if( (price_cur-price_yesterday)*100 > m_rise*price_yesterday && m_rise > 0 ) {
+			result |= CMP_RESULT_RISE;
+			cmp_result += "涨幅大于:"+m_rise+"%";
+		}
+
+		if( (price_yesterday - price_cur)*100 > m_drop * price_yesterday && m_drop > 0) {
+			result |= CMP_RESULT_DROP;
+			cmp_result += "跌幅大于:"+m_drop+"%";
+		}
+
+		return result;
+	}
+
+	public String GetCmpareResult() {
+		return cmp_result;
+	}
+
+
+	public List<StockMng> getStocks() {
+		List<StockMng> list = new ArrayList<StockMng>(max_stock_count);
+		Cursor cursor = getItems();
+
+		while( cursor.moveToNext()) {
+			StockMng stock = new StockMng(m_sqlite);
+			stock.Set(cursor.getString(1), cursor.getString(2),
+					  cursor.getFloat(3), cursor.getFloat(4), cursor.getInt(5), cursor.getInt(6), cursor.getInt(7)>0);
+			list.add(stock);
+		}
+		cursor.close();
+		return list;
+	}
+
+
+	public String[] GetCodes() {
+		Cursor cursor = getItems();
+        String[] codes = new String[cursor.getCount()];
+		int i = 0;
+
+		while( cursor.moveToNext()) {
+			if( cursor.getInt(7) > 0 ) { //如果该股票激活就取它的代码
+				codes[i++] = cursor.getString(1);
+			}
+		}
+		cursor.close();
+		return codes;
+	}
+
+	//查询条目方法
+
+	private Cursor getItems() {
+		// TODO Auto-generated method stub
+		SQLiteDatabase db = m_sqlite.getReadableDatabase();
+		Cursor cursor = db.query(TABLE_NAME, FROM, null, null, null, null, ORDER_BY);
+		//startManagingCursor(cursor);
+		return cursor;
+	}
+
+	private Cursor getItem(String code) {
+		// TODO Auto-generated method stub
+		SQLiteDatabase db = m_sqlite.getReadableDatabase();
+        String[] codes = {code};
+		Cursor cursor = db.query(TABLE_NAME, FROM, "code=?", codes, null, null, ORDER_BY);
+		//startManagingCursor(cursor);
+		return cursor;
+	}
+	//因为查询不用修改数据库，因此利用只读句柄，然后调用查询的query方法来执行SQL语句，FROM是
+
+	//想要使用的列构成的数组，ORDER_BY告诉SQLite按照从新到旧的顺序返回查询结果。
+
+	//添加条目方法
+
+	private void addItem(String code, String name, float price_h, float price_l, int rise, int drop, boolean isvalid) {
+		// TODO Auto-generated method stub
+		SQLiteDatabase db = m_sqlite.getWritableDatabase();
+		ContentValues values = new ContentValues();
+		values.put(F_CODE, code);
+		values.put(F_NAME, name);
+		values.put(F_PRICE_H, price_h);
+		values.put(F_PRICE_L, price_l);
+		values.put(F_RISE, rise);
+		values.put(F_DROP, drop);
+		values.put(F_VALID, isvalid);
+		db.insert(TABLE_NAME, null, values);
+	}
+
+	public String getItemsString() {
+		// TODO Auto-generated method stub
+		Cursor cursor = getItems();
+		StringBuilder builder = new StringBuilder("Saved items:\n");
+		/*
+		        String title  = "|"+
+		            cursor.getColumnName(1)+  "| |" +
+		            cursor.getColumnName(2)+"| |" +
+		            cursor.getColumnName(3)+ "| |" +
+		            cursor.getColumnName(4)+ "| |" +
+		            cursor.getColumnName(5)+ "| |" +
+		            cursor.getColumnName(6)+ "| |" +
+		            cursor.getColumnName(7)+ "|\n";
+		*/
+		String title = "|代码|名称|高于|低于|涨幅|跌幅|有效|";
+		builder.append(title).append("\n");
+
+		while(cursor.moveToNext()) {
+			long id = cursor.getLong(0);
+			String code = cursor.getString(1);
+			String name = cursor.getString(2);
+			float price_h = cursor.getFloat(3);
+			float price_l = cursor.getFloat(4);
+			int rise = cursor.getInt(5);
+			int drop = cursor.getInt(6);
+			int isvalid = cursor.getInt(7);
+			builder.append(id).append(": ");
+			builder.append(code).append(": ");
+			builder.append(name).append(": ");
+			builder.append(price_h).append(": ");
+			builder.append(price_l).append(": ");
+			builder.append(rise).append(": ");
+			builder.append(drop).append(": ");
+			builder.append(isvalid).append("\n");
+		}
+		cursor.close();
+		return builder.toString();
+	}
+
+	public void Get(String code) throws ExceptionStockNoExist {
+		// TODO Auto-generated method stub
+		Cursor cursor = getItems();
+
+		while(cursor.moveToNext()) {
+			if( code.equals(cursor.getString(1) ) ) {
+				Set(code, cursor.getString(2),
+					cursor.getFloat(3), cursor.getFloat(4),
+					cursor.getInt(5), cursor.getInt(6), cursor.getInt(7)>0 );
+				
+				cursor.close();
+				return;
+			}
+		}
+		cursor.close();
+		throw new  ExceptionStockNoExist();
+	}
+
+
+	public static class ExceptionAddStock extends Exception {
+		public ExceptionAddStock() {
+			super("stock already exist!");
+		}
+	}
+
+	public static class ExceptionStockNoExist extends Exception {
+		public ExceptionStockNoExist() {
+			super("stock is not exist!");
+		}
+	}
+
+	public void Update() {
+		// TODO Auto-generated method stub
+		SQLiteDatabase db = m_sqlite.getWritableDatabase();
+		ContentValues values = new ContentValues();
+		values.put(F_CODE, m_code);
+		values.put(F_NAME, m_name);
+		values.put(F_PRICE_H, m_price_h);
+		values.put(F_PRICE_L, m_price_l);
+		values.put(F_RISE, m_rise);
+		values.put(F_DROP, m_drop);
+		values.put(F_VALID, m_valid);
+		db.update(TABLE_NAME, values, "code=?", new String[] {m_code});
+	}
+
+	public void Delete(String code) {
+		// TODO Auto-generated method stub
+		SQLiteDatabase db = m_sqlite.getWritableDatabase();
+		db.delete(TABLE_NAME, "code=?",  new String[] {code});
+	}
+
+	public void Enable(boolean isvalid) {
+		// TODO Auto-generated method stub
+		m_valid = isvalid;
+		// Update();
+	}
+
+
+
+}

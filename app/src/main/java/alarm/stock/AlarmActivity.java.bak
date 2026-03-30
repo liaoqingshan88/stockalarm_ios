@@ -1,0 +1,913 @@
+package alarm.stock;
+
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.Notification;
+import android.app.NotificationManager;
+import android.net.Uri;
+import android.os.Bundle;
+import android.os.Handler;
+import android.provider.MediaStore.Audio;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+//add by ipdiy for view
+import android.widget.AdapterView;
+import android.widget.AdapterView.OnItemClickListener;
+import android.widget.Button;
+import android.widget.ListView;
+import android.widget.RelativeLayout;
+import android.widget.SimpleAdapter;
+import android.widget.TextView;
+import android.widget.EditText;
+import android.widget.Toast;
+import android.util.Log;
+import android.view.*;
+import android.view.ContextMenu.ContextMenuInfo;
+import android.view.View.OnCreateContextMenuListener;
+import android.view.View.OnFocusChangeListener;
+
+//add by ipdiy for http
+//import java.io.BufferedReader;
+//import java.io.IOException;
+//import java.io.InputStreamReader;
+//import java.net.URL;
+//import java.net.URLConnection;
+
+
+//add by ipdiy for stock interface
+import alarm.stock.SinaStockInfo.ParseStockInfoException;
+
+import static alarm.stock.Constants.*;
+//import static android.provider.BaseColumns._ID;
+import android.content.ComponentName;
+//import android.content.ContentValues;
+import android.content.DialogInterface;
+import android.content.Intent;
+
+//add by ipdiy for stock mangage
+import alarm.stock.StockMng.*;
+
+/*
+因为要修改数据库，所以调用getWritableDatabase()方法来获取数据库的一个写句柄，当然也可以获取
+到读句柄。
+add by ipdiy for notifi
+import android.app.NotificationManager;
+import android.app.Notification;
+*/
+
+
+import android.app.PendingIntent;
+import android.content.Context;
+//import android.content.Intent;
+//import android.content.ContentValues;
+import android.graphics.Color;
+//import android.app.Activity;
+
+//import alarm.stock.StockNotify;
+//import java.util.ArrayList;
+//import java.util.List;
+
+//import org.apache.commons.httpclient.HttpException;
+
+//import android.app.Activity;
+//import android.os.Bundle;
+//import android.widget.ArrayAdapter;
+//import android.widget.ListView;
+
+import alarm.stock.Update;
+
+
+public class AlarmActivity extends Activity {
+//	private static String[] FROM= {_ID,F_CODE,F_NAME,F_PRICE_H, F_PRICE_L, F_RISE, F_DROP, F_VALID};
+
+//	private static String ORDER_BY = _ID;
+	//*/
+	private StockSQLite mySqlite;
+	private Activity m_activity = this;
+	private SinaStockClient mClient;
+	StockMng m_stockMng;
+	static  boolean is_first_run = true;
+	static boolean is_notified = false;
+	static boolean is_http_timeout = false;
+	
+	private String url_reg = "";
+	private String url_apk = "";
+	private String url_ver = "";
+
+	private Login m_login; 
+	private Update m_update;
+	
+	Handler handler;
+	Runnable runnable;
+	/*
+	protected void alarm_dialog() {
+	      AlertDialog.Builder builder = new Builder(Main.this);
+	      builder.setMessage("确认退出吗？");
+	      builder.setTitle("提示");
+	      builder.setPositiveButton("确认", new OnClickListener() {
+
+	       @Override
+	       public void onClick(DialogInterface dialog, int which) {
+	        dialog.dismiss();
+	        Main.this.finish();
+	       }
+	      });
+
+	      builder.setNegativeButton("取消", new OnClickListener() {
+	       @Override
+	       handler.removeCallbacks(runnable);
+	       public void onClick(DialogInterface dialog, int which) {
+	        dialog.dismiss();
+	       }
+	      });
+
+	      builder.create().show();
+	     }
+
+	  
+	private void myNotify(Activity act) {
+		StockNotify notify = new  StockNotify(act);
+		notify.Notification("");
+	}
+  */
+	/*
+	private void alarm_dialog() {
+	    AlertDialog.Builder builder = new AlertDialog.Builder(this);
+	    //builder.setIcon(R.drawable.icon);
+	    builder.setTitle("继续预警吗？");
+	    builder.setPositiveButton("确定", new DialogInterface.OnClickListener() {
+	        public void onClick(DialogInterface dialog, int whichButton) {
+	            //这里添加点击确定后的逻辑
+	        }
+	    });
+	    builder.setNegativeButton("取消", new DialogInterface.OnClickListener() {
+	        public void onClick(DialogInterface dialog, int whichButton) {
+	            //这里添加点击确定后的逻辑
+	            handler.removeCallbacks(runnable);
+	        }
+	    });
+	    builder.create().show();
+	}
+	*/
+
+
+	static boolean stock_trade_time = false;
+	int check_inter = 5;   //init check interval 5 second
+	int check_count_down = check_inter;	//检查倒计时
+	int err_times = 0;
+	int enter_time = 0;
+
+	
+	/** Called when the activity is first created. */
+	@Override
+	public void onCreate(Bundle savedInstanceState) {
+		super.onCreate(savedInstanceState);
+		setContentView(R.layout.main);
+
+		/*创建的快捷方式运行的程序，在有警告后点击出来的是新程序
+		由手工复制的快捷方式不会，所以不创建2013.5.18
+		//不升级，只创建快捷方式
+		Update u = new Update(url_apk, url_ver,  AlarmActivity.this);
+		if(! u.IfaddShortCut())
+		{
+			u.createSystemSwitcherShortCut();
+		}
+		*/
+        enter_time = StockTime.GetCurTime();
+		mySqlite = new StockSQLite(this, DB_NAME, null, DB_VERSION);
+		m_stockMng = new StockMng(mySqlite);
+		//ListView list = (ListView) findViewById(R.id.ListView01);
+		createListView(m_stockMng.getStocks());
+
+		if(!StockTime.IsTradeTime()) {
+			stock_trade_time = true;//以便runnable处理
+		}
+
+		final TextView eView = (TextView) findViewById(R.id.edit_stock_info) ;
+		final ListView listview = (ListView) findViewById(R.id.ListView01);
+		eView.setText(m_stockMng.GetCode() );
+
+		final Button btn_stop=(Button)findViewById(R.id.btn_stop);
+		btn_stop.setFocusable(true);
+		btn_stop.requestFocus(); 
+		btn_stop.setFocusableInTouchMode(true);
+
+		m_update = new Update(AlarmActivity.this);
+		m_login = new Login(m_update);
+		m_update.SetLoginer(m_login);
+		
+		//cmp.execute(m_stockMng);
+		handler=new Handler();
+		runnable=new Runnable() {
+			@Override
+			public void run() {
+				// TODO Auto-generated method stub
+				//要做的事情
+				final TextView eView = (TextView) findViewById(R.id.edit_stock_info) ;
+				final TextView eTitle = (TextView) findViewById(R.id.ItemHighTitle) ;
+				//eView.setText("begin..");
+				
+				String[] codes = m_stockMng.GetCodes();
+
+				if(codes.length == 0 )
+				{
+					btn_stop.setText("开始");
+					eView.setHeight(100);
+					eView.setText("\n您还没有添加股票，请输入股票代码添加股票。\n");
+					eTitle.getLayoutParams().height =500;
+					eTitle.setText(Constants.help_info);
+					eTitle.append(Constants.free_info);
+					return;
+				}
+				else{
+					eTitle.getLayoutParams().height = 40;
+				}
+
+				//不这么来一下可能会死机
+				if( is_first_run ) {
+                   /*
+					 Handler handler = new Handler();        
+					         handler.postDelayed(new Runnable() {            
+					            public void run() {
+					                 // TODO Auto-generated method stub
+					                DisableItems(m_stockMng.getStocks());
+					             }
+					         }, 2000);
+					     */
+					//DisableItems(m_stockMng.getStocks());
+					is_first_run = false;
+				}
+
+				if (StockTime.IsTradeTime() ) {
+					if( !is_http_timeout  )
+					{
+						if( !stock_trade_time ) {
+							stock_trade_time = true;
+							eView.setText(StockTime.GetTime() + " 预警开始");
+						}
+						else {
+							eView.setText(StockTime.GetTime() + " 预警中...");
+						}
+					}
+				}
+				else {
+					if( stock_trade_time) {
+						//由运行转为暂停
+						stock_trade_time = false;
+						eView.setText(StockTime.GetTime() +" 预警暂停");
+
+						try {
+							// String codes[] = m_stockMng.GetCodes();
+							mClient = SinaStockClient.getInstance();
+							List<SinaStockInfo>  stockinfo  = mClient.getStockInfo(codes );
+							
+							ListView listview = (ListView) findViewById(R.id.ListView01);
+							if( stockinfo != null )
+							{
+								ReflashStockPrice(listview, stockinfo);
+							}
+						}
+						catch(Exception e) {
+							eView.setText("price"+e.toString() );
+						}
+
+						handler.postDelayed(this, 1000);
+						return;
+					}
+					else  {
+						String now = StockTime.GetTime();
+						eView.setText(now +" 预警停止");
+
+						if( now.indexOf(Constants.time_of_auto_update) != -1) {
+							m_update.check();
+							handler.postDelayed(this, 1000*60);//只检测一次
+						}
+						else {
+							handler.postDelayed(this, 1000);
+						}
+
+						return;
+					}
+				}
+
+				if( StockTime.GetCurTime() - enter_time > 60 && StockTime.GetCurTime() - enter_time < 100)
+				{
+					if( !m_login.IsLogin() )
+					{
+						m_login.Do();
+					}
+				}
+				//List<SinaStockInfo>  result = null;
+				
+				try
+				{
+					//*每5秒一次检测
+					if(  (check_count_down --) > 0) {
+						if( (!is_http_timeout) && ( check_count_down > 10) )
+						{
+							check_count_down = 1;	//由超时到正常，更快速的把“继续”改成“暂停"
+						}
+						handler.postDelayed(this, 1000);
+						return;
+					}
+					//*/
+					check_count_down = check_inter;
+
+					Compare cmp = new Compare((AlarmActivity)m_activity, eView, listview);				 
+		 			cmp.execute(m_stockMng);
+
+					System.out.println("timeout " +is_http_timeout +"T"+ err_times + "times");
+					if( is_http_timeout )
+					{   // IOException, ParseStockInfoException e)
+						if (++err_times >= 3) {
+							eView.setText("网络异常，请检查网络，网络正常后点击‘继续’");
+							btn_stop.setText("继续");
+							check_inter = 60;
+							//handler.postDelayed(this, 1000*60);
+						}
+						else {
+							check_inter = 10;
+							//handler.postDelayed(this, 1000*10);
+						}
+					}
+					else
+					{
+						check_inter = 5;//恢复默认
+						//能到这里，说明网络恢复正常，清除err_times
+						if( err_times>0) {
+							btn_stop.setText("暂停");
+							err_times = 0;
+						}
+					}
+
+					if( ! is_notified ) {
+						//没有警告就继续检测
+						handler.postDelayed(this, 1000);
+					}
+					else {
+						eView.setText(StockTime.GetTime() +" 预警停止");
+						btn_stop.setText("继续");
+					}
+				}
+				catch(Exception e)
+				{
+					
+				}
+				
+			}
+		};
+		
+		handler.postDelayed(runnable, 1000*1);//每秒执行一次runnable.刷新时间 
+
+		
+		//showItems(cursor);
+		//pause按钮
+		//final Button btn_stop=(Button)findViewById(R.id.btn_stop);
+		//static int i = -1;
+		btn_stop.setOnClickListener(new View.OnClickListener() {
+			public void onClick(View v) {
+				final TextView eView = (TextView) findViewById(R.id.edit_stock_info) ;
+
+				if( btn_stop.getText().equals("继续") || btn_stop.getText().equals("开始") ) {
+					handler.postDelayed(runnable, 1000);//每两秒执行一次runnable.
+					eView.setText(StockTime.GetTime() +" 预警中...");
+					btn_stop.setText("暂停");
+					is_notified = false;	//以便继续检测
+				}
+				else {
+					handler.removeCallbacks(runnable);
+					eView.setText(StockTime.GetTime() +" 预警停止");
+					btn_stop.setText("继续");
+				}
+			}
+		});
+		
+		
+		//showItems(cursor);
+		//添加 按钮
+		final Button btn_Add=(Button)findViewById(R.id.btn_submit);
+		btn_Add.setOnClickListener(new View.OnClickListener() {
+			public void onClick(View v) {
+				final EditText e_code = (EditText) findViewById(R.id.edit_stock_code) ;
+				final EditText e_price_h = (EditText) findViewById(R.id.edit_price_h) ;
+				final EditText e_price_l = (EditText) findViewById(R.id.edit_price_l) ;
+				final EditText e_rise = (EditText) findViewById(R.id.edit_rise) ;
+				final EditText e_drop = (EditText) findViewById(R.id.edit_drop) ;
+				final TextView eView = (TextView) findViewById(R.id.edit_stock_info) ;
+				final TextView eTitle = (TextView) findViewById(R.id.ItemHighTitle) ;
+				
+				String code = e_code.getText().toString();
+				//String name = "noname";
+				String s_price_h = e_price_h.getText().toString();
+				String s_price_l = e_price_l.getText().toString();
+				String s_rise = e_rise.getText().toString();
+				String s_drop = e_drop.getText().toString();
+				Float price_h =  s_price_h.length()>0? Float.parseFloat(s_price_h):(float)0.0;
+				Float price_l = s_price_l.length()>0? Float.parseFloat(s_price_l):(float)0.0;
+				Integer rise = s_rise.length()>0? Integer.parseInt(s_rise):0;
+				Integer drop_ = s_drop.length()>0? Integer.parseInt(s_drop):0;
+				//eView.setText(e_code.getText()+"\r\n");
+				eView.setText("");
+				StockMng stockMng = new StockMng(mySqlite);
+
+				try {
+					mClient = SinaStockClient.getInstance();
+					List<SinaStockInfo>  stockinfo  = mClient.getStockInfo(new String[] {code});
+					SinaStockInfo stock1 = stockinfo.get(0);
+					stockMng.Set(code,stock1.getName(), price_h, price_l, rise, drop_, true);
+					stockMng.Add();
+					
+					eTitle.setText(Constants.list_title);
+					eTitle.getLayoutParams().height = 24;
+					
+					
+					createListView(m_stockMng.getStocks());
+					DisableItems(m_stockMng.getStocks());
+					
+					
+					/*
+					if( CMP_RESULT_NONE != stockMng.Compare(stock1.getNowPrice(), stock1.getYestodayPrice()))
+					{
+					    eView.append("ok\n");
+					}
+					else
+					{
+					    eView.append("comare err\n");
+					}
+
+					eView.append(stock1.toString());
+					*/
+				}
+				catch (ParseStockInfoException e) {
+					eView.append("股票代码不存在"+code);
+					check_inter = 2;//add by ipdiy 2013.5.21 debug
+					
+				}
+				catch (ExceptionAddStock e) {
+					//eView.append("股票代码已添加"+code);
+					try {
+						stockMng.Update();
+						createListView(m_stockMng.getStocks());
+						DisableItems(m_stockMng.getStocks());
+					}
+					catch (Exception ee) {
+						// TODO Auto-generated catch block
+						ee.printStackTrace();
+						Log.e("add", "error: " + ee.getMessage(), ee);
+						//eView.append("add"+ee.toString());
+					}
+				}
+				catch (Exception e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+					Log.e("add", "error: " + e.getMessage(),e);
+					//eView.append("add2"+e.toString());
+				}
+			}
+		});
+
+		
+		final EditText e_code = (EditText) findViewById(R.id.edit_stock_code) ;
+		//TextEdit eEdit = (TextEdit) findViewById(R.id.edit_stock_code) ;
+		//股票代码输入后自动查询
+		e_code.setOnFocusChangeListener(new OnFocusChangeListener() {
+			final TextView eView = (TextView) findViewById(R.id.edit_stock_info) ;
+			@Override
+			public void onFocusChange(View v, boolean hasFocus) {
+				final String code = e_code.getText().toString();
+
+				if( hasFocus==false) {
+					try {
+						if (code.length() == 0) {
+							return;
+						}
+
+						//查询股价
+						mClient = SinaStockClient.getInstance();
+						List<SinaStockInfo>  stockinfo  = mClient.getStockInfo(new String[] {code});
+						SinaStockInfo stock1 = stockinfo.get(0);
+						eView.append("\n"+stock1.toString());
+						//查询数据库
+						StockMng stockMng = new StockMng(mySqlite);
+						stockMng.Get(code);
+						final EditText e_price_h = (EditText) findViewById(R.id.edit_price_h) ;
+						final EditText e_price_l = (EditText) findViewById(R.id.edit_price_l) ;
+						final EditText e_rise = (EditText) findViewById(R.id.edit_rise) ;
+						final EditText e_drop = (EditText) findViewById(R.id.edit_drop) ;
+						e_price_h.setText(stockMng.GetHigh().toString());
+						e_price_l.setText(stockMng.GetLow().toString());
+						e_rise.setText(""+stockMng.GetRise());
+						e_drop.setText(""+stockMng.GetDrop());
+						btn_Add.setText("更新预警");
+					}
+					catch (ExceptionStockNoExist e) {
+						btn_Add.setText("添加预警");
+					}
+					catch (ParseStockInfoException e) {
+						eView.append("\n股票代码不存在"+code);
+						check_inter = 2;//add by ipdiy 2013.5.21  debug
+					}
+					catch (Exception e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+						Log.e("input", "error: " + e.getMessage(), e);
+						//eView.append("autoquery"+e.toString());
+					}
+				}
+				else {
+					eView.setText("请输入股票代码(只能是数字)");
+				}
+			}
+		});
+		
+		
+		//升级按钮
+		Button btn_update =(Button)findViewById(R.id.btn_test);
+		btn_update.setOnClickListener(new View.OnClickListener() {
+			public void onClick(View v) {
+				//*
+				//final EditText e_code = (EditText) findViewById(R.id.edit_stock_code) ;
+				//final TextView eView = (TextView) findViewById(R.id.edit_stock_info) ;
+				///String code[] = {""};
+				//code[0] = e_code.getText().toString();
+				//StockMng stockMng = new StockMng(mySqlite);
+				//eView.setText(stockMng.getItemsString());
+				Toast.makeText(AlarmActivity.this, "正在检测版本", Toast.LENGTH_LONG).show();
+				//m_update = new Update(url_apk, url_ver,  AlarmActivity.this);
+				m_update.check();
+				// */
+			}
+		});
+		
+		//帮助按钮
+		Button btn_help =(Button)findViewById(R.id.btn_help);
+		btn_help.setOnClickListener(new View.OnClickListener() {
+			public void onClick(View v) {
+				
+				/*
+				 Uri uri = Uri.parse("http://ipdiy.net:8080/mysoft/stockalarm/index.jsp");  
+				 Intent it = new Intent(Intent.ACTION_VIEW, uri);  
+				 startActivity(it);
+				 */
+				Intent intent = new Intent(AlarmActivity.this, Help.class); 
+				startActivity(intent);
+				 
+			}
+		});
+			
+		Button btn_share =(Button)findViewById(R.id.btn_share);
+		btn_share.setOnClickListener(new View.OnClickListener() {
+			public void onClick(View v) {
+                Intent intent=new Intent(Intent.ACTION_SEND);
+				intent.setType("text/plain"); 
+				intent.putExtra(Intent.EXTRA_SUBJECT, "????"); 
+				intent.putExtra(Intent.EXTRA_TEXT, share_info);  
+				intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK); 
+				startActivity(Intent.createChooser(intent, getTitle())); 
+			}
+		});
+		
+		
+	}
+
+	@Override
+	public void onResume() {
+		super.onResume();
+		//DisableItems(m_stockMng.getStocks());
+	}
+
+	@Override
+	public void onBackPressed() {
+		new AlertDialog.Builder(this).setTitle("退出后将不能收到股价预警，确认退出吗？")
+		.setIcon(android.R.drawable.ic_dialog_info)
+		.setPositiveButton("确定", new DialogInterface.OnClickListener() {
+			@Override
+			public void onClick(DialogInterface dialog, int which) {
+				// 点击“确认”后的操作
+				//this.finish();
+				android.os.Process.killProcess(android.os.Process.myPid());
+			}
+		})
+		.setNegativeButton("取消", new DialogInterface.OnClickListener() {
+			@Override
+			public void onClick(DialogInterface dialog, int which) {
+				// 点击“返回”后的操作,这里不设置没有任何操作
+			}
+		}).show();
+// super.onBackPressed();
+	}
+
+	public void Notification( String msg) {
+		
+		/*
+		int Notification_ID_BASE = 110;
+		Notification baseNF;
+		//Notification ID
+		int Notification_ID_MEDIA = 119;
+		Notification mediaNF;
+		mediaNF = new Notification();
+		mediaNF.icon = R.drawable.ic_launcher;
+		mediaNF.tickerText = "股票预警55";
+		//自定义声音
+		mediaNF.sound = Uri.withAppendedPath(Audio.Media.INTERNAL_CONTENT_URI, "6");
+		//通知时发出的振动
+		//第一个参数: 振动前等待的时间
+		//第二个参数： 第一次振动的时长、以此类推
+		//long[] vir = {0,100,200,300};
+		//mediaNF.vibrate = vir;
+		PendingIntent pd;
+		//Intent intent = new Intent(this,StockNotify.class);
+		// pd = PendingIntent.getActivity(this, 0, intent, 0);
+		//pd = PendingIntent.getActivity(this, 0, new Intent(this, StockNotify.class), 0);//
+		Intent appIntent = new Intent(Intent.ACTION_MAIN);
+		//appIntent.setAction(Intent.ACTION_MAIN);
+		appIntent.addCategory(Intent.CATEGORY_LAUNCHER);
+		appIntent.setComponent(
+			new ComponentName(m_activity.getPackageName(), m_activity.getPackageName() + "." + m_activity.getLocalClassName()));
+		appIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED |Intent.FLAG_ACTIVITY_CLEAR_TOP);//关键的一步，设置启动模式
+		pd =PendingIntent.getActivity(m_activity, 0,appIntent,0);
+		mediaNF.setLatestEventInfo(m_activity, "股票预警",msg, pd);
+		NotificationManager nm;
+		nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+		mediaNF.flags |= mediaNF.FLAG_AUTO_CANCEL;
+		mediaNF.defaults |= Notification.DEFAULT_VIBRATE;
+		//mediaNF.defaults |= Notification.DEFAULT_LIGHTS;
+		nm.notify(Notification_ID_MEDIA, mediaNF);
+		
+		*/
+		/*
+		Notification notification = new Notification();   
+		NotificationManager notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);  
+		  
+		  
+		notification.icon = R.drawable.ic_launcher; //你自己的资源图片  
+		Context mContext = getApplicationContext();  
+		
+		
+		Intent appIntent = new Intent(Intent.ACTION_MAIN);  
+		appIntent.addCategory(Intent.CATEGORY_LAUNCHER);  
+		appIntent.setComponent(new ComponentName(this.getPackageName(), this.getPackageName() + "." + this.getLocalClassName()));  
+		appIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK| Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);//关键的一步，设置启动模式  
+		  
+		  
+		PendingIntent intent = PendingIntent.getActivity(mContext, 0,  
+		appIntent, 0);  
+		notification.setLatestEventInfo(getApplicationContext(),  
+		getString(R.string.app_name), "-----", intent);  
+		  
+		  
+		notificationManager.notify(0, notification);  
+*/
+		
+		is_notified = true;
+		String app_name = getString(R.string.app_name);
+
+
+		NotificationManager barmanager=(NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
+        Notification notice = new Notification( R.drawable.ic_launcher,
+        		app_name,
+        		System.currentTimeMillis());
+        
+        notice.flags=Notification.FLAG_AUTO_CANCEL;
+        Intent appIntent = new Intent(Intent.ACTION_MAIN);
+     
+        appIntent.addCategory(Intent.CATEGORY_LAUNCHER);
+        appIntent.setComponent(new ComponentName(this.getPackageName(), this.getPackageName() + "." + this.getLocalClassName())); 
+        appIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK| Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);//关键的一步，设置启动模式为打开上一个activity
+        PendingIntent contentIntent =PendingIntent.getActivity(this, 0,appIntent,0);
+        notice.setLatestEventInfo(this, app_name ,msg, contentIntent);
+        //#if 0
+        //notice.sound = Uri.withAppendedPath(Audio.Media.INTERNAL_CONTENT_URI, "1");
+        //#else   //modi to default ring. ipdiy 2015.3.17 . because Audio.Media.INTERNAL_CONTENT_URI no round at xiaomi3.
+        notice.defaults |= Notification.DEFAULT_SOUND;
+        //#endif
+        notice.defaults |= Notification.DEFAULT_VIBRATE;
+        barmanager.notify(0,notice);
+		
+	}
+
+	void DisableItems(List<StockMng> list_stock) {
+		ListView list = (ListView) findViewById(R.id.ListView01);
+
+		if( list.getChildCount() == 0) {
+			return;
+		}
+
+		//final EditText e_info = (EditText) findViewById(R.id.edit_stock_info) ;
+		for(int i=0; i<list_stock.size(); i++) {
+			StockMng stock = list_stock.get(i);
+
+			if(! stock.IsValid()) {
+				list.getChildAt(i).setBackgroundColor(Color.GRAY);
+				//setTitle("-"+stock.GetName());
+			}
+			else {
+				list.getChildAt(i).setBackgroundColor(Color.BLACK);
+				//setTitle("+"+stock.GetName());
+			}
+		}
+	}
+
+	void createListView(List<StockMng> list_stock) {
+		//绑定Layout里面的ListView
+		ListView list = (ListView) findViewById(R.id.ListView01);
+		//生成动态数组，加入数据
+		ArrayList<HashMap<String, Object>> listItem = new ArrayList<HashMap<String, Object>>();
+		if( list_stock.size() == 0)//add 2013.5.21
+		{
+			return ;
+		}
+
+		for(int i=0; i<list_stock.size(); i++) {
+			StockMng stock = list_stock.get(i);
+			HashMap<String, Object> map = new HashMap<String, Object>();
+			//map.put("ItemImage", R.drawable.ic_launcher);//图像资源的ID
+			map.put("code", stock.GetCode());
+			map.put("name", stock.GetName());
+			//map.put("price", stock.GetPrice());
+			map.put("high", stock.GetHigh().toString());
+			map.put("low", stock.GetLow().toString());
+			map.put("rise", stock.GetRise());
+			map.put("drop", stock.GetDrop());
+			listItem.add(map);
+		}
+
+		//*
+		//生成适配器的Item和动态数组对应的元素
+		SimpleAdapter listItemAdapter = new SimpleAdapter(
+			this,
+			listItem,//数据源
+			R.layout.list_items,//ListItem的XML实现
+			//动态数组与ImageItem对应的子项
+			new String[] {"code", "name", "price", "high","low","rise", "drop"},
+			//ImageItem的XML文件里面的一个ImageView,两个TextView ID
+			new int[] {0, R.id.list_name, R.id.list_price_now,
+					   R.id.list_high, R.id.list_low, R.id.list_rise, R.id.list_drop
+					  }
+		);
+		//添加并且显示
+		list.setAdapter(listItemAdapter);
+		//list.getItemAtPosition(0).ForceColor = Color.RED;
+		// list.Items[0].ForeColor = Color.RED;
+		// list.Items[0].UseItemStyleForSubItems = false;
+		// list.selectedItems.BackColor = Color.RED;
+		//*/
+		//添加点击
+		list.setOnItemClickListener(new OnItemClickListener() {
+			@Override
+			public void onItemClick(AdapterView<?> arg0, View arg1, int arg2,
+			long arg3) {
+				Map <String,Object> map = extracted(arg2);
+				String code = map.get("code").toString();
+				final EditText e_code = (EditText) findViewById(R.id.edit_stock_code) ;
+				e_code.setText(code);
+
+				try {
+					//查询数据库
+					StockMng stockMng = new StockMng(mySqlite);
+					stockMng.Get(code);
+					final EditText e_price_h = (EditText) findViewById(R.id.edit_price_h) ;
+					final EditText e_price_l = (EditText) findViewById(R.id.edit_price_l) ;
+					final EditText e_rise = (EditText) findViewById(R.id.edit_rise) ;
+					final EditText e_drop = (EditText) findViewById(R.id.edit_drop) ;
+					e_price_h.setText(stockMng.GetHigh().toString());
+					e_price_l.setText(stockMng.GetLow().toString());
+					e_rise.setText(""+stockMng.GetRise());
+					e_drop.setText(""+stockMng.GetDrop());
+					final Button btn_Add=(Button)findViewById(R.id.btn_submit);
+					btn_Add.setText("更新预警");
+				}
+				catch (Exception e) {
+				}
+			}
+		});
+		//list.getItemAtPosition(0).
+		//添加长按点击
+		list.setOnCreateContextMenuListener(new OnCreateContextMenuListener() {
+			@Override
+			public void onCreateContextMenu(ContextMenu menu, View v,ContextMenuInfo menuInfo) {
+				menu.setHeaderTitle("股票更改");
+				//ListView list = (ListView) findViewById(R.id.ListView01);
+				menu.add(1, 0, 4, "删除这支股票预警");
+
+				try {
+					AdapterView.AdapterContextMenuInfo info = (AdapterView.AdapterContextMenuInfo)menuInfo;
+					int stock_id = (int)info.id;//这里的info.id对应的就是数据库中_id的值
+					Map <String,Object> map = extracted(stock_id);
+					String code = map.get("code").toString();
+					StockMng stockMng = new StockMng(mySqlite);
+					stockMng.Get(code);
+
+					if( stockMng.IsValid()) {
+						menu.add(2, 1, 5, "暂停这支股票预警");
+					}
+					else {
+						menu.add(2, 1, 5, "激活这支股票预警");
+					}
+				}
+				catch (Exception e) {
+				}
+			}
+		});
+	}
+
+	//长按菜单响应函数
+	@Override
+	public boolean onContextItemSelected(MenuItem item) {
+		AdapterView.AdapterContextMenuInfo info = (AdapterView.AdapterContextMenuInfo)item.getMenuInfo();
+		int stock_id = (int)info.id;//这里的info.id对应的就是数据库中_id的值
+		//info.toString();
+		Map <String,Object> map = extracted(stock_id);
+		String code = map.get("code").toString();
+		StockMng stockMng = new StockMng(mySqlite);
+
+		switch( item.getItemId()) {
+			case 0:
+				stockMng.Delete(code);
+				createListView(m_stockMng.getStocks());
+				DisableItems(m_stockMng.getStocks());
+				break;
+
+				//
+			case 1:
+				try {
+					stockMng.Get(code);
+
+					if( stockMng.IsValid()) {
+						stockMng.Enable(false);
+					}
+					else {
+						stockMng.Enable(true);
+					}
+
+					stockMng.Update();
+					DisableItems(m_stockMng.getStocks());
+				}
+				catch(Exception e) {
+					setTitle(getTitle() + "diable + " + e.toString());
+				}
+
+				break;
+		}
+
+		return super.onContextItemSelected(item);
+	}
+
+
+	
+	public static void ReflashStockPrice(ListView lv, List<SinaStockInfo> stockinfos) {
+		// TODO Auto-generated method stub
+		//RelativeLayout lr = (RelativeLayout) findViewById(R.id.RelativeLayout01);
+		//TextView mText1 = (TextView)lr.getChildAt(1);
+		//int id2 = mText1.getId();
+		//获取下一行的index
+		//int index = listview.getSelectedItemPosition() + 1;
+		//获取下一行的TextViewstockinfos.size()
+		if( null == lv || null == stockinfos )
+		{
+			Log.e("reflash", "ReflashStockPrice para err");
+			return ;
+		}
+		
+
+		for( int i = 0, j =0; i<lv.getCount()&&j < stockinfos.size() ; i++) {
+			View group = lv.getChildAt(i);
+            if( null == group )
+            {
+                Log.d("reflash", "stock count more than view");
+                break;  //add by ipdiy. 205.4.8 .. ????е??п??????????????
+            }
+			// int id = group.getId();
+			RelativeLayout lr2 = (RelativeLayout)group;
+			TextView NameText = (TextView)lr2.getChildAt(0);
+			String name = NameText.getText().toString();
+			TextView priceText = (TextView)lr2.getChildAt(1);
+			//StockMng stock = new StockMng(mySqlite);
+			//String code = codeText.getText().toString();
+			//stock.Get(code);
+			SinaStockInfo stock1 = stockinfos.get(j);
+
+			if( stock1.getName().equals(name)) {
+				//TextView mText = (TextView)listview.getChildAt(i).get;
+				//获取一下行的值
+				//String value = tv.getText().toString();
+				String price = ""+stock1.getNowPrice();
+				priceText.setText(price);
+				j++;
+			}
+		}
+	}	
+
+	
+	private HashMap<String, Object> extracted(int position) {
+		ListView list=(ListView)findViewById(R.id.ListView01);
+		return (HashMap<String,Object>)(list.getAdapter().getItem(position));
+	}
+	
+}
+
+

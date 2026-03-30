@@ -1,0 +1,126 @@
+// 使用最新的插件语法
+plugins {
+    id 'com.android.application'
+    // 如果你使用了 Kotlin，还需要加上这一行：
+    // id 'org.jetbrains.kotlin.android' version '1.9.21' apply false
+}
+
+// 与「Generate Signed APK / release」使用同一把 key：把密钥信息写在项目根目录 keystore.properties
+// 参考 keystore.properties.example
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+def hasReleaseKeystore = keystorePropertiesFile.exists()
+
+android {
+    // 1. 基础配置
+    namespace 'alarm.stock' // 包名
+    compileSdk 28 // Android P (API 28)
+
+    // 2. 默认配置
+    defaultConfig {
+        applicationId "yanhexing.stock.alarm"  // 包名
+        minSdk 28      // 最低支持 Android  P (API 28)
+        targetSdk 28   // 目标 Android P (API 28)
+        versionCode 215
+        versionName "2.32.5"
+        
+        // 配置支持的CPU架构（Android P要求必须支持64位）
+        ndk {
+            abiFilters 'armeabi-v7a', 'arm64-v8a'
+        }
+    }
+
+    // 3. 编译选项 (解决乱码和 Java 版本)
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8 // 使用 Java 8 (支持 lambda 表达式)
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    
+    // 设置 Java 编译编码为 GBK（源文件是 GBK 编码）
+    tasks.withType(JavaCompile) {
+        options.encoding = "GBK"
+    }
+
+    signingConfigs {
+        release {
+            if (hasReleaseKeystore) {
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                if (keystoreProperties['storeType'] != null && keystoreProperties['storeType'].toString().trim().length() > 0) {
+                    storeType keystoreProperties['storeType']
+                }
+            }
+        }
+    }
+
+    // 4. 构建类型
+    buildTypes {
+        // 开发运行专用：可调试，但使用 release keystore 签名
+        // 目的：Android Studio 点 Run 安装的包，也能被线上 signed release APK 覆盖升级（签名一致）
+        dev {
+            initWith release
+            debuggable true
+            minifyEnabled false
+            shrinkResources false
+            if (hasReleaseKeystore) {
+                signingConfig signingConfigs.release
+            } else {
+                signingConfig signingConfigs.debug
+            }
+            // 不改变 applicationId，确保与 release 同包名可覆盖升级
+        }
+
+        debug {
+            if (hasReleaseKeystore) {
+                signingConfig signingConfigs.release
+            }
+        }
+
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // 确保release版本不是测试版本
+            testCoverageEnabled false
+            debuggable false
+            if (hasReleaseKeystore) {
+                signingConfig signingConfigs.release
+            } else {
+                // 未配置 keystore.properties 时与旧行为一致，避免本地无法打出 release 包
+                signingConfig signingConfigs.debug
+            }
+            // zipAlignEnabled true  // 默认已启用
+        }
+    }
+    
+    // 5. 打包选项 - 确保所有架构都包含
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = false
+        }
+    }
+    
+    // 6. Lint配置 - 允许某些警告，确保构建成功
+    lintOptions {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+}
+
+// 7. 依赖项
+dependencies {
+    implementation files('libs/commons-httpclient-3.1.jar')
+    // commons-httpclient 需要的依赖
+    implementation 'commons-logging:commons-logging:1.2'
+    implementation 'commons-codec:commons-codec:1.15'
+    // Google ML Kit Text Recognition for OCR
+    implementation 'com.google.mlkit:text-recognition:16.0.0'
+    implementation 'com.google.mlkit:text-recognition-chinese:16.0.0'
+    implementation 'androidx.core:core:1.3.2'
+    implementation 'com.android.support:support-annotations:28.0.0'
+}

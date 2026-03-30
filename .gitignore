@@ -1,0 +1,21 @@
+# Build
+/build/
+/app/build/
+/.gradle/
+*.apk
+*.ap_
+*.dex
+
+# IDE
+*.iml
+.idea/
+local.properties
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Keystore (安全相关，不提交)
+keystore.properties
+*.jks
+*.keystore

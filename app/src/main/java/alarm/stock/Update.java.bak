@@ -1,0 +1,654 @@
+package alarm.stock;
+
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.Dialog;
+import android.app.ProgressDialog;
+import android.content.ContentResolver;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
+//import android.content.Intent.ShortcutIconResource;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.database.Cursor;
+import android.net.Uri;
+import android.os.AsyncTask;
+import android.os.Environment;
+import android.os.Parcelable;
+import android.util.Log;
+import android.webkit.URLUtil;
+import android.widget.Toast;
+import java.io.File;
+//import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+//import java.io.IOException;
+import java.io.InputStream;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLConnection;
+import java.util.ArrayList;
+//import java.util.Properties;
+import org.xml.sax.Attributes;
+import org.xml.sax.InputSource;
+import org.xml.sax.SAXException;
+import org.xml.sax.helpers.DefaultHandler;
+
+import java.text.SimpleDateFormat;
+import java.util.Date;
+//import java.util.jar.Attributes;
+
+import javax.xml.parsers.SAXParser;
+import javax.xml.parsers.SAXParserFactory;
+
+
+public class Update extends Activity {
+	private static final String TAG = "DOWNLOADAPK";
+
+	private int version_inner_new;		//内部版本，用于比较
+	private String version_ext_new;		//外部版本，用于显示
+	private int version_inner_local;
+	private String version_ext_local;		//外部版本，用于显示
+	public ProgressDialog pBar;
+	private String currentFilePath = "";
+	private String fileEx = "";
+	private String fileNa = "";
+	private String downURL = "";
+	private String VersionUri = "";
+	private Context mContext;
+	//add by idpiy 2013.6.25
+	private Login m_login;
+	private boolean request_update;
+	
+	public Update( final Context context) {
+		mContext = context;
+		request_update = false;
+		version_inner_new = 0;
+		version_ext_new = "1.0";
+		version_inner_local = GetLocalVerCode();
+		version_ext_local = GetLocalVerName();
+		
+	}
+
+	public void SetLoginer(Login login)
+	{
+		m_login = login;
+	}
+	
+	public void SetUrl(String urlapk, String urlver)
+	{
+		SimpleDateFormat df = new SimpleDateFormat("yyyyMMddHHmmss");
+		String time = "?time=" + df.format(new Date());//主要是避开手机的缓存
+		String user = "&user="+User.getDeviceid(mContext);
+		String curVer = "&cur_ver="+version_inner_local;
+		downURL = urlapk + time + user+curVer;
+		VersionUri = urlver + time+ user+curVer;
+		//version_inner_local = 0;
+	}
+	
+	public boolean IsRequestUpdate()
+	{
+		return request_update;
+	}
+	
+	public void check() {
+		
+		if( m_login.IsLogin() )
+		{
+			// 解析Version网页，获取版本号
+			//DeleteFolder("/sdcard/"+ Constants.path_install_child);
+			DeleteFolder( Constants.path_install_child);
+			CreateFolder( Constants.path_install);
+			CreateFolder( Constants.path_install_child);
+			
+			GetVerFromServer(VersionUri);
+		}
+		else
+		{
+			request_update = true;
+			m_login.Do();			
+		}
+	}
+
+
+	public int GetLocalVerCode() {
+		try {
+			PackageManager manager = mContext.getPackageManager();
+			PackageInfo info = manager.getPackageInfo(mContext.getPackageName(), 0);
+			int ver = info.versionCode;
+			//String version = info.versionName;
+			//int ver = info.versionName;
+			return ver;//this.getString(R.string.version_name) + version;
+		}
+		catch (Exception e) {
+			e.printStackTrace();
+			return 0;
+			//rerurn R.string.version_name;
+			//return "@string/app_name";//this.getString(R.string.can_not_find_version_name);
+		}
+	}
+	public String GetLocalVerName() {
+		try {
+			PackageManager manager = mContext.getPackageManager();
+			PackageInfo info = manager.getPackageInfo(mContext.getPackageName(), 0);
+			String version = info.versionName;
+			return version;//this.getString(R.string.version_name) + version;
+		}
+		catch (Exception e) {
+			e.printStackTrace();
+			//rerurn R.string.version_name;
+			return "未知版本";//this.getString(R.string.can_not_find_version_name);
+		}
+	}
+
+	boolean CreateFolder(String strFolder) {
+		File file = new File(strFolder);
+
+		if (!file.exists()) {
+			if (file.mkdirs()) {
+				return true;
+			}
+			else {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+
+
+	private void compareVer(boolean isRunManual) {
+//当有最新版本的时候
+		if(version_inner_new == 0) {
+			if( isRunManual)
+			{ Toast.makeText(mContext, String.format("检测失败"), Toast.LENGTH_LONG).show(); }
+		}
+		else if( version_inner_new > version_inner_local ) {
+			Dialog dialog = new AlertDialog.Builder(mContext).setTitle("系统更新")
+			.setMessage(String.format("发现新版本[%s]，请更新！",  version_ext_new)) 
+			
+			//.setMessage(String.format("发现新版本[%s]，目前版本为[%s]，请更新！", 
+				//version_ext_new, version_ext_local)) // 设置内容
+
+			// 设置确定按钮
+			.setPositiveButton("确定"
+			, new DialogInterface.OnClickListener() {
+				@Override
+				public void onClick(DialogInterface dialog,
+				int which) {
+					pBar = new ProgressDialog(mContext);
+					pBar.setTitle("正在下载");
+					pBar.setMessage("请稍候...");
+					pBar.setProgressStyle(ProgressDialog.STYLE_SPINNER);
+					fileEx = downURL.substring(downURL.lastIndexOf(".") + 1, downURL.length()).toLowerCase();
+					fileEx = fileEx.substring(0, fileEx.lastIndexOf("?"));
+					fileNa = downURL.substring(downURL.lastIndexOf("/") + 1, downURL.lastIndexOf("."));
+					getFile(downURL);
+				}
+			}).setNegativeButton("取消",
+			new DialogInterface.OnClickListener() {
+				@Override
+				public void onClick(DialogInterface dialog,
+				int whichButton) {
+// 点击"取消"按钮之后退出程序
+				}
+			}).create();// 创建
+// 显示对话框
+			dialog.show();
+		}
+		else {
+			if(isRunManual)
+			{ Toast.makeText(mContext, String.format("已经是最新版本[%s]", version_ext_local), Toast.LENGTH_LONG).show(); }
+		}
+	}
+
+
+
+	private void getFile(final String strPath) {
+		pBar.show();
+
+		try {
+			if (strPath.equals(currentFilePath) ) {
+				getDataSource(strPath);
+			}
+
+			currentFilePath = strPath;
+			Runnable r = new Runnable() {
+				@Override
+				public void run() {
+					try {
+						//DeleteFolder(path_download);
+						getDataSource(strPath);
+					}
+					catch (Exception e) {
+						Log.e(TAG, e.getMessage(), e);
+					}
+				}
+			};
+			new Thread(r).start();
+		}
+		catch(Exception e) {
+			e.printStackTrace();
+		}
+	}
+
+
+
+	/*取得远程文件*/
+	private void getDataSource(String strPath) throws Exception {
+		if (!URLUtil.isNetworkUrl(strPath)) {
+			Log.d("Tag", "error");
+		}
+		else {
+			/*取得URL*/
+			URL myURL = new URL(strPath);
+			/*建立联机*/
+			URLConnection conn = myURL.openConnection();
+			conn.connect();
+			/*InputStream 下载文件*/
+			InputStream is = conn.getInputStream();
+
+			if (is == null) {
+				Log.d("tag", "error");
+				throw new RuntimeException("没有读取到文件内容");
+			}
+
+			/*建立临时文件*/
+			try {
+		/*				//获取程序默认数据库路径
+				//String apkPath = mContext.getFilesDir().getAbsolutePath();
+				String apkPath = "/sdcard/alarm/";
+				String apkName = fileNa+"." + fileEx;
+				File myTempFile = new File(apkPath, apkName);
+				if(!myTempFile.getParentFile().exists()){
+					myTempFile.getParentFile().mkdirs();
+				}			
+
+				//String filename = Constants.path_install_child + fileNa+"." + fileEx;
+				FileOutputStream fos = mContext.openFileOutput(fileNa+"." + fileEx, Context.MODE_PRIVATE);
+	
+				File myTempFile = File.createTempFile(Constants.path_install_child+fileNa, "." + fileEx);
+				/*myTempFile.getAbsolutePath();
+		*/		
+				
+				//将文件写入临时盘
+				boolean is_install_rom = true;
+				
+				if (Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED)) 
+				{    
+					// sd card 可用    
+					is_install_rom = false;         
+				}else 
+				{    
+					// 当前不可用    
+					is_install_rom = true;
+				}
+				String apkPath;
+				if( is_install_rom)
+				{
+					apkPath = mContext.getFilesDir().getAbsolutePath()+"/";
+					//apkPath = "/data/data/alarm.stock/files/";
+				}
+				else
+				{
+					apkPath = Constants.path_install_child ;
+				}
+				File myTempFile = new File(apkPath, Constants.install_name);
+				if(!myTempFile.getParentFile().exists()){
+					myTempFile.getParentFile().mkdirs();
+				}	
+				//FileOutputStream fos =  mContext.openFileOutput("stock_install.apk",Context.MODE_PRIVATE );
+				FileOutputStream fos = new FileOutputStream(myTempFile);
+				//*/
+		
+				
+				byte buf[] = new byte[128];
+
+				do {
+					int numread = is.read(buf);
+
+					if (numread <= 0) {
+						break;
+					}
+
+					fos.write(buf, 0, numread);
+				}
+				while (true);
+				is.close();
+				/*打开文件进行安装*/
+				
+				String command = "chmod 777 " + apkPath + Constants.install_name; 
+				Runtime runtime = Runtime.getRuntime(); 
+				runtime.exec(command);
+
+				Log.d("no", command+ myTempFile.length());
+
+				openFile(myTempFile);
+				
+				
+			}
+			catch (Exception ex) {
+				Log.d("Tag", "error");
+				Log.e(TAG, "error: " + ex.getMessage(), ex);
+				Toast.makeText(mContext, String.format("下载失败"), Toast.LENGTH_LONG).show();
+			}
+		}
+	}
+
+
+	//删除存储卡内的临时文件
+	private void delFile(String strFileName) {
+		File myFile = new File(strFileName);
+
+		if(myFile.exists()) {
+			myFile.delete();
+		}
+	}
+	/* 在手机上打开文件 */
+
+	private void openFile(File f) {
+		pBar.cancel();
+		Intent intent = new Intent(Intent.ACTION_MAIN);
+		//intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK |Intent.FLAG_ACTIVITY_CLEAR_TOP);
+		intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK| Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);//关键的一步，设置启动模式为打开上一个activity
+		
+		intent.setAction(android.content.Intent.ACTION_VIEW);
+		/* 调用getMIMEType()来取得MimeType */
+		String type = getMIMEType(f);
+		/* 设定intent的file与MimeType */
+		intent.setDataAndType(Uri.fromFile(f), type);
+		mContext.startActivity(intent);
+	}
+	/* 判断文件MimeType的method */
+	private String getMIMEType(File f) {
+		String type = "";
+		String fName = f.getName();
+		/* 取得扩展名 */
+		String end = fName.substring(fName.lastIndexOf(".") + 1, fName.length()).toLowerCase();
+
+		/* 按扩展名的类型决定MimeType */
+		if(end.equals("m4a")
+		   || end.equals("mp3")
+		   || end.equals("mid")
+		   || end.equals("xmf")
+		   || end.equals("ogg")
+		   || end.equals("wav")) {
+			type = "audio";
+		}
+		else if(end.equals("3gp") || end.equals("mp4")) {
+			type = "video";
+		}
+		else if(end.equals("jpg")
+				|| end.equals("gif")
+				|| end.equals("png")
+				|| end.equals("jpeg")
+				|| end.equals("bmp")) {
+			type = "image";
+		}
+		else if(end.equals("apk")) {
+			/* android.permission.INSTALL_PACKAGES */
+			type = "application/vnd.android.package-archive";
+		}
+		else {
+			type = "*";
+		}
+
+		/*如果无法直接打开，就跳出软件清单给使用者选择 */
+		if(!end.equals("apk")) {
+			type += "/*";
+		}
+
+		return type;
+	}
+
+	private void GetVerFromServer(String resourceUrl) {
+		GetNewVer gv = new GetNewVer();
+		gv.execute(resourceUrl);
+	}
+
+	class VesionXMLContent extends DefaultHandler {
+		private String version_inner; // 获取内部版本号
+		private String version_ext; // 获取外部版本号
+		private String preTag;// 前一个元素名称
+
+		public String getVersionInner() {
+			return version_inner;
+		}
+		public String getVersionExt() {
+			return version_ext;
+		}
+
+		@Override
+		public void startDocument() throws SAXException {
+			version_inner =new String();
+			version_ext =new String();
+
+		}
+		@Override
+		public void characters(char[] ch, int start, int length)
+		throws SAXException {
+			String data = new String(ch, start, length);
+
+			if ("ver_inner".equals(preTag)) {
+				version_inner = data;
+			}
+			if ("ver_ext".equals(preTag)) {
+				version_ext = data;
+			}
+
+		}
+
+		
+		@Override
+		public void startElement(String uri, String localName, String qName, Attributes attributes)
+		throws SAXException {
+			preTag = localName;
+		}
+
+		@Override
+		public void endElement(String uri, String localName, String qName)
+		throws SAXException {
+			preTag = null;
+		}
+	}
+//==========================================================================
+// GetNewVer
+//==========================================================================
+	class GetNewVer extends AsyncTask<String, Integer, String> {
+
+
+		@Override
+		protected String doInBackground(String... urlVer) {
+			String ver_inner = null;
+			URL url = null;
+
+			try {
+				url = new URL(urlVer[0]);
+			}
+			catch (MalformedURLException e) {
+				e.printStackTrace();
+			}
+
+			InputSource inStream = null;
+
+			try {
+				inStream = new InputSource(url.openStream());
+				inStream.setEncoding("UTF-8");
+				//ver_inner = SAXGetVersionService.readRssXml(is);
+				SAXParserFactory spf = SAXParserFactory.newInstance();
+				SAXParser saxParser = spf.newSAXParser(); // 创建解析器
+				VesionXMLContent handler = new VesionXMLContent();
+				saxParser.parse(inStream, handler);
+				ver_inner = handler.getVersionInner();
+				version_ext_new = handler.getVersionExt();
+			}
+			catch (Exception e) {
+				e.printStackTrace();
+				ver_inner = "0";
+			}
+
+			return ver_inner;
+		}
+
+		@Override
+		protected void onCancelled() {
+			super.onCancelled();
+		}
+
+		@Override
+		protected void onPostExecute(String result) {
+			version_inner_new = Integer.parseInt(result);
+			
+			String now = StockTime.GetTime();
+
+			if( now.indexOf(Constants.time_of_auto_update) != -1) {
+				compareVer(false);//自动升级
+			}
+			else {
+				compareVer(true);//手工升级
+			}
+		}
+	}
+
+
+	private boolean DeleteFolder(String path) {
+		boolean success = false;
+
+		try {
+			ArrayList<File> images = new ArrayList<File>();
+			getFiles(images, path); //
+
+			for (int i = 1; i < images.size(); i++) {
+				File latestSavedImage = images.get(i);
+
+				if( latestSavedImage.exists()) {
+					success = latestSavedImage.delete();
+				}
+			}
+		}
+		catch (Exception e) {
+			e.printStackTrace();
+			Toast.makeText(mContext, "delete" + e.toString(), Toast.LENGTH_LONG).show();
+		}
+
+		return success;
+	}
+
+	private void getFiles(ArrayList<File> fileList, String path) {
+		File[] allFiles = new File(path).listFiles();
+
+		if( allFiles == null ) {
+			return;
+		}
+
+		for (int i = 0; i < allFiles.length; i++) {
+			File file = allFiles[i];
+
+			if (file.isFile()) {
+				fileList.add(file);
+			}
+			else if (!file.getAbsolutePath().contains(".thumnail")) {
+				getFiles(fileList, file.getAbsolutePath());
+			}
+		}
+	}
+
+/*	
+	 public void addShortCut(){
+
+	        Intent shortcut = new Intent("com.android.launcher.action.INSTALL_SHORTCUT");
+
+	        // 设置属性
+
+	        shortcut.putExtra(Intent.EXTRA_SHORTCUT_NAME, getResources().getString(R.string.app_name));
+
+	        ShortcutIconResource iconRes = Intent.ShortcutIconResource.fromContext(mContext, R.drawable.ic_launcher);
+
+	        shortcut.putExtra(Intent.EXTRA_SHORTCUT_ICON,iconRes);
+
+	 
+
+	        // 是否允许重复创建
+
+	        shortcut.putExtra("duplicate", false);
+
+	        Intent intent = new Intent(Intent.ACTION_MAIN);
+
+	        intent.setFlags(Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+
+	        intent.addFlags(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY);
+
+	        intent.addCategory(Intent.CATEGORY_LAUNCHER);
+
+	        intent.setClass(mContext, mContext.getClass());
+
+	        // 设置启动程序
+
+	        System.out.println("createIcon");
+
+	        shortcut.putExtra(Intent.EXTRA_SHORTCUT_INTENT, intent);
+
+	        mContext.sendBroadcast(shortcut);
+
+	    }
+*/
+	   public  boolean  IfaddShortCut(){
+
+		// TODO Auto-generated method stub
+	         boolean isInstallShortcut = false;
+	         final ContentResolver cr = mContext.getContentResolver();
+	         final String AUTHORITY = "com.android.launcher.settings";
+	         final String AUTHORITY2 = "com.android.launcher2.settings";
+			 
+	         final Uri CONTENT_URI = Uri.parse("content://" + AUTHORITY +  "/favorites?notify=true");
+	         final Uri CONTENT_URI2 = Uri.parse("content://" + AUTHORITY2 + "/favorites?notify=true");
+
+	 		//for before android.2.1
+	        Cursor c = cr.query(
+	                 CONTENT_URI,
+	                 new String[] { "title", "iconResource" },
+	                 "title=?",
+	                 new String[] { mContext.getResources().getString(
+	                         R.string.app_name) }, null);
+	         if (c != null && c.getCount() > 0) {
+	             isInstallShortcut = true;
+	         }
+
+			//for after android 2.2
+	        Cursor c2 = cr.query(
+	                 CONTENT_URI2,
+	                 new String[] { "title", "iconResource" },
+	                 "title=?",
+	                 new String[] { mContext.getResources().getString(
+	                         R.string.app_name) }, null);
+	         if (c2 != null && c2.getCount() > 0) {
+	             isInstallShortcut = true;
+	         }
+
+			 
+	         return isInstallShortcut;
+	     }
+
+
+	   
+
+	   public void createSystemSwitcherShortCut() {  
+	        final Intent addIntent = new Intent( "com.android.launcher.action.INSTALL_SHORTCUT");  
+	        final Parcelable icon = Intent.ShortcutIconResource.fromContext(  
+	        		mContext, R.drawable.ic_launcher); // 获取快捷键的图标  
+	        addIntent.putExtra("duplicate", false);  
+	        
+	        final Intent myIntent = new Intent(mContext, mContext.getClass());  
+	        //myIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);  
+	        //final Intent myIntent = new Intent(Intent.ACTION_MAIN);  
+	        myIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK| Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);//关键的一步，设置启动模式为打开上一个activity
+
+	        addIntent.putExtra(Intent.EXTRA_SHORTCUT_NAME, mContext.getString(R.string.app_name));// 快捷方式的标题  
+	        addIntent.putExtra(Intent.EXTRA_SHORTCUT_ICON_RESOURCE, icon);// 快捷方式的图标  
+	        addIntent.putExtra(Intent.EXTRA_SHORTCUT_INTENT, myIntent);// 快捷方式的动作  
+	        mContext.sendBroadcast(addIntent);  
+	    }  
+	
+}
+

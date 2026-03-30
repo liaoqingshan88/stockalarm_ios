@@ -1,0 +1,469 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	android:layout_width="fill_parent"
+	android:layout_height="fill_parent"
+	android:orientation="vertical"
+	android:windowSoftInputMode="stateHidden"
+	android:fitsSystemWindows="true">
+
+	<LinearLayout
+		android:id="@+id/header_controls_container"
+		android:layout_width="fill_parent"
+		android:layout_height="wrap_content"
+		android:orientation="vertical"
+		android:visibility="visible">
+
+		<!-- 输入区域标签行 -->
+		<LinearLayout
+			android:layout_width="fill_parent"
+			android:layout_height="wrap_content"
+			android:layout_weight="0"
+			android:orientation="horizontal"
+			android:paddingTop="4dp"
+			android:paddingBottom="2dp"
+			android:paddingLeft="8dp"
+			android:paddingRight="8dp"
+			android:visibility="visible"
+			android:minHeight="28dp"
+			android:background="#FFFFFF">
+
+			<TextView
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_weight="1.2"
+				android:text="代码"
+				android:textSize="13sp"
+				android:textStyle="bold"
+				android:textColor="#000000"
+				android:gravity="left"
+				android:paddingLeft="4dp" />
+
+		<TextView
+			android:layout_width="0dp"
+			android:layout_height="wrap_content"
+			android:layout_weight="0.8"
+			android:text="高于"
+			android:textSize="13sp"
+			android:textStyle="bold"
+			android:textColor="#000000"
+			android:gravity="center"
+			android:paddingLeft="4dp"
+			android:paddingRight="4dp" />
+
+		<TextView
+			android:layout_width="0dp"
+			android:layout_height="wrap_content"
+			android:layout_weight="0.8"
+			android:text="低于"
+			android:textSize="13sp"
+			android:textStyle="bold"
+			android:textColor="#000000"
+			android:gravity="center"
+			android:paddingLeft="4dp"
+			android:paddingRight="4dp" />
+
+		<TextView
+			android:layout_width="0dp"
+			android:layout_height="wrap_content"
+			android:layout_weight="0.6"
+			android:text="上涨"
+			android:textSize="13sp"
+			android:textStyle="bold"
+			android:textColor="#000000"
+			android:gravity="center"
+			android:paddingLeft="4dp"
+			android:paddingRight="4dp" />
+
+		<TextView
+			android:layout_width="0dp"
+			android:layout_height="wrap_content"
+			android:layout_weight="0.6"
+			android:text="下跌"
+			android:textSize="13sp"
+			android:textStyle="bold"
+			android:textColor="#000000"
+			android:gravity="center"
+			android:paddingRight="4dp" />
+
+		</LinearLayout>
+
+		<!-- 输入区域输入框行 -->
+		<LinearLayout
+			android:layout_width="fill_parent"
+			android:layout_height="wrap_content"
+			android:layout_weight="0"
+			android:orientation="horizontal"
+			android:paddingTop="4dp"
+			android:paddingBottom="4dp"
+			android:paddingLeft="8dp"
+			android:paddingRight="8dp"
+			android:visibility="visible"
+			android:minHeight="44dp"
+			android:background="#FFFFFF"
+			android:gravity="center_vertical">
+
+		<EditText
+			android:id="@+id/edit_stock_code"
+			android:layout_width="0dp"
+			android:layout_height="wrap_content"
+			android:layout_weight="1.2"
+			android:ems="6"
+			android:imeOptions="actionNone"
+			android:inputType="textNoSuggestions"
+			android:maxLength="10"
+			android:maxLines="1"
+			android:minHeight="40dp"
+			android:singleLine="true"
+			android:textSize="15sp"
+			android:textColor="#000000"
+			android:background="#FFFFFF"
+			android:padding="8dp"
+			android:layout_marginRight="4dp"
+			android:hint="A股6位/港股00700或hk00700">
+			<requestFocus />
+		</EditText>
+
+		<EditText
+			android:id="@+id/edit_price_h"
+			android:layout_width="0dp"
+			android:layout_height="wrap_content"
+			android:layout_weight="0.8"
+			android:ems="6"
+			android:inputType="number|numberDecimal"
+			android:minHeight="40dp"
+			android:textSize="15sp"
+			android:textColor="#000000"
+			android:background="#FFFFFF"
+			android:padding="8dp"
+			android:gravity="center"
+			android:layout_marginRight="4dp"
+			android:hint="价格" />
+
+		<EditText
+			android:id="@+id/edit_price_l"
+			android:layout_width="0dp"
+			android:layout_height="wrap_content"
+			android:layout_weight="0.8"
+			android:ems="6"
+			android:inputType="number|numberDecimal"
+			android:minHeight="40dp"
+			android:textSize="15sp"
+			android:textColor="#000000"
+			android:background="#FFFFFF"
+			android:padding="8dp"
+			android:gravity="center"
+			android:layout_marginRight="4dp"
+			android:hint="价格" />
+
+		<LinearLayout
+			android:layout_width="0dp"
+			android:layout_height="wrap_content"
+			android:layout_weight="0.6"
+			android:orientation="horizontal"
+			android:gravity="center"
+			android:layout_marginRight="4dp">
+			
+			<EditText
+				android:id="@+id/edit_rise"
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_weight="1"
+				android:ems="2"
+				android:inputType="number"
+				android:maxLength="2"
+				android:minHeight="40dp"
+				android:textSize="15sp"
+				android:textColor="#000000"
+				android:background="#FFFFFF"
+				android:padding="8dp"
+				android:gravity="center"
+				android:hint="%" />
+			
+			<TextView
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:text="%"
+				android:textSize="14sp"
+				android:textColor="#000000"
+				android:gravity="center_vertical"
+				android:paddingLeft="2dp" />
+		</LinearLayout>
+
+		<LinearLayout
+			android:layout_width="0dp"
+			android:layout_height="wrap_content"
+			android:layout_weight="0.6"
+			android:orientation="horizontal"
+			android:gravity="center">
+			
+			<EditText
+				android:id="@+id/edit_drop"
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_weight="1"
+				android:ems="2"
+				android:inputType="numberSigned"
+				android:maxLength="2"
+				android:minHeight="40dp"
+				android:textSize="15sp"
+				android:textColor="#000000"
+				android:background="#FFFFFF"
+				android:padding="8dp"
+				android:gravity="center"
+				android:hint="%" />
+			
+			<TextView
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:text="%"
+				android:textSize="14sp"
+				android:textColor="#000000"
+				android:gravity="center_vertical"
+				android:paddingLeft="2dp" />
+		</LinearLayout>
+
+		</LinearLayout>
+
+
+		<LinearLayout
+			android:layout_width="fill_parent"
+			android:layout_height="wrap_content"
+			android:layout_weight="0"
+			android:orientation="horizontal"
+			android:padding="2dp"
+			android:visibility="visible">
+
+		<Button
+			android:id="@+id/btn_submit"
+			android:layout_width="0dp"
+			android:layout_height="wrap_content"
+			android:layout_weight="1"
+			android:minHeight="40dp"
+			android:text="添加预警"
+			android:textSize="13sp"
+			android:textStyle="bold"
+			android:singleLine="true"
+			android:ellipsize="none"
+			android:layout_margin="1dp"
+			android:background="#FFFFFF"
+			android:textColor="#000000" />
+
+		<Button
+			android:id="@+id/btn_stop"
+			android:layout_width="0dp"
+			android:layout_height="wrap_content"
+			android:layout_weight="1"
+			android:minHeight="40dp"
+			android:text="停止"
+			android:textSize="13sp"
+			android:textStyle="bold"
+			android:layout_margin="1dp"
+			android:background="#FFFFFF"
+			android:textColor="#000000" />
+
+		<Button
+			android:id="@+id/btn_test"
+			android:layout_width="0dp"
+			android:layout_height="wrap_content"
+			android:layout_weight="1"
+			android:minHeight="40dp"
+			android:text="升级"
+			android:textSize="13sp"
+			android:textStyle="bold"
+			android:layout_margin="1dp"
+			android:background="#FFFFFF"
+			android:textColor="#000000" />
+
+		<Button
+			android:id="@+id/btn_share"
+			android:layout_width="0dp"
+			android:layout_height="wrap_content"
+			android:layout_weight="1"
+			android:minHeight="40dp"
+			android:text="分享"
+			android:textSize="13sp"
+			android:textStyle="bold"
+			android:layout_margin="1dp"
+			android:background="#FFFFFF"
+			android:textColor="#000000" />
+
+		<Button
+			android:id="@+id/btn_help"
+			android:layout_width="0dp"
+			android:layout_height="wrap_content"
+			android:layout_weight="1"
+			android:minHeight="40dp"
+			android:text="帮助"
+			android:textSize="13sp"
+			android:textStyle="bold"
+			android:layout_margin="1dp"
+			android:background="#FFFFFF"
+			android:textColor="#000000" />
+
+		<Button
+			android:id="@+id/btn_settings"
+			android:layout_width="0dp"
+			android:layout_height="wrap_content"
+			android:layout_weight="1"
+			android:minHeight="40dp"
+			android:text="设置"
+			android:textSize="13sp"
+			android:textStyle="bold"
+			android:layout_margin="1dp"
+			android:background="#FFFFFF"
+			android:textColor="#000000" />
+
+		</LinearLayout>
+
+		<LinearLayout
+			android:layout_width="fill_parent"
+			android:layout_height="wrap_content"
+			android:layout_weight="0"
+			android:orientation="horizontal"
+			android:visibility="visible">
+
+			<Button
+				android:id="@+id/btn_import_image"
+				android:layout_width="fill_parent"
+				android:layout_height="wrap_content"
+				android:layout_weight="1"
+				android:text="导入股票图片" />
+
+		</LinearLayout>
+
+	</LinearLayout>
+
+	<LinearLayout
+		android:layout_width="fill_parent"
+		android:layout_height="0dp"
+		android:layout_weight="1"
+		android:orientation="vertical">
+
+
+		<TextView
+			android:id="@+id/edit_stock_info"
+			android:layout_width="fill_parent"
+			android:layout_height="48dp"
+			android:text="请稍候..."
+			android:gravity="center_vertical" />
+
+		<!-- 列标题行 - 使用与列表项相同的布局结构确保对齐 -->
+		<LinearLayout
+			android:id="@+id/ItemHighTitle"
+			android:layout_width="fill_parent"
+			android:layout_height="wrap_content"
+			android:orientation="horizontal"
+			android:minHeight="44dp"
+			android:padding="10dp"
+			android:paddingTop="12dp"
+			android:paddingBottom="12dp"
+			android:background="#FFFFFF"
+			android:layout_marginLeft="4dp"
+			android:layout_marginRight="4dp"
+			android:layout_marginTop="4dp"
+			android:layout_marginBottom="4dp"
+			android:gravity="center_vertical"
+			android:elevation="2dp">
+			
+			<TextView
+				android:id="@+id/header_sort_name"
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_weight="1.2"
+				android:text="名称"
+				android:textSize="14sp"
+				android:textStyle="bold"
+				android:textColor="#000000"
+				android:clickable="true"
+				android:focusable="true"
+				android:paddingLeft="4dp"
+				android:paddingRight="4dp" />
+			
+			<TextView
+				android:id="@+id/header_sort_price"
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_weight="0.8"
+				android:text="现价"
+				android:textSize="14sp"
+				android:textStyle="bold"
+				android:textColor="#000000"
+				android:gravity="right"
+				android:clickable="true"
+				android:focusable="true"
+				android:paddingLeft="4dp"
+				android:paddingRight="4dp" />
+
+			<TextView
+				android:id="@+id/header_sort_chg"
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_weight="0.7"
+				android:text="现涨"
+				android:textSize="14sp"
+				android:textStyle="bold"
+				android:textColor="#000000"
+				android:gravity="right"
+				android:clickable="true"
+				android:focusable="true"
+				android:paddingLeft="4dp"
+				android:paddingRight="4dp" />
+			
+			<TextView
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_weight="0.7"
+				android:text="高价"
+				android:textSize="14sp"
+				android:textStyle="bold"
+				android:textColor="#000000"
+				android:gravity="right"
+				android:paddingLeft="4dp"
+				android:paddingRight="4dp" />
+			
+			<TextView
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_weight="0.7"
+				android:text="低价"
+				android:textSize="14sp"
+				android:textStyle="bold"
+				android:textColor="#000000"
+				android:gravity="right"
+				android:paddingLeft="4dp"
+				android:paddingRight="4dp" />
+			
+			<TextView
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_weight="0.6"
+				android:text="上涨"
+				android:textSize="14sp"
+				android:textStyle="bold"
+				android:textColor="#000000"
+				android:gravity="right"
+				android:paddingLeft="4dp"
+				android:paddingRight="4dp" />
+			
+			<TextView
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_weight="0.6"
+				android:text="下跌"
+				android:textSize="14sp"
+				android:textStyle="bold"
+				android:textColor="#000000"
+				android:gravity="right"
+				android:paddingRight="4dp" />
+		</LinearLayout>
+
+		<ListView
+			android:id="@+id/ListView01"
+			android:layout_width="fill_parent"
+			android:layout_height="0dp"
+			android:layout_weight="1" />
+
+	</LinearLayout>
+
+
+</LinearLayout>
