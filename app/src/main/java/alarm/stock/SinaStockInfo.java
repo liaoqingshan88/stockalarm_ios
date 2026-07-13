@@ -29,6 +29,8 @@ package alarm.stock;
  */
 public class SinaStockInfo {
 
+	//股票查询代码（如 sh600000, hk00700）
+	private String mCode;
 	//股票名字
 	private String mName;
 	//今日开盘价
@@ -61,10 +63,11 @@ public class SinaStockInfo {
 	//时间
 	private String mTime;
 
-	private SinaStockInfo(String name, float todayPrice, float yestodayPrice,
+	private SinaStockInfo(String code, String name, float todayPrice, float yestodayPrice,
 						  float nowPrice, float highestPrice, float lowestPrice,
 						  float buy1Price, float sell1Price, long tradeCount, float tradeMoney,
 						  BuyOrSellInfo[] buy, BuyOrSellInfo[] sell, String date, String time) {
+		mCode = code;
 		mName = name;
 		mTodayPrice = todayPrice;
 		mYestodayPrice = yestodayPrice;
@@ -138,6 +141,7 @@ public class SinaStockInfo {
 		final float tradeMoney;
 		BuyOrSellInfo buy1, buy2, buy3, buy4, buy5;
 		BuyOrSellInfo sell1, sell2, sell3, sell4, sell5;
+        final String code;
 		final String date;
 		final String time;
 		
@@ -176,6 +180,7 @@ public class SinaStockInfo {
 			// 29: 空字段
 			// 30: 日期时间（20260312112351，格式：YYYYMMDDHHMMSS）
 			
+			code = infoStr[2].trim();
 			name = infoStr[1].trim();
 			nowPrice = parseFloatSafely(infoStr[3], 0.0f);
 			yestodayPrice = parseFloatSafely(infoStr[4], nowPrice);
@@ -219,6 +224,7 @@ public class SinaStockInfo {
 		} else {
 			// 新浪API格式（原有逻辑）
 			name = infoStr[0];
+			code = "";  // 新浪格式没有股票代码字段
 			todayPrice = Float.parseFloat(infoStr[1]);
 			yestodayPrice = Float.parseFloat(infoStr[2]);
 			nowPrice = Float.parseFloat(infoStr[3]);
@@ -241,13 +247,21 @@ public class SinaStockInfo {
 			date = infoStr[30];
 			time = infoStr[31];
 		}
-		SinaStockInfo stockInfo = new SinaStockInfo(name, todayPrice, yestodayPrice, nowPrice,
+		SinaStockInfo stockInfo = new SinaStockInfo(code, name, todayPrice, yestodayPrice, nowPrice,
 				highestPrice, lowestPrice, buy1Price, sell1Price,
 				tradeCount, tradeMoney,
 				new BuyOrSellInfo[] {buy1, buy2, buy3, buy4, buy5},
 				new BuyOrSellInfo[] {sell1, sell2, sell3, sell4, sell5},
 				date, time);
 		return stockInfo;
+	}
+
+	/**
+	 * 获取股票查询代码（如 sh600000, hk00700）
+	 * @return 查询代码
+	 */
+	public String getCode() {
+		return mCode;
 	}
 
 	/**

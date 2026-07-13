@@ -1892,8 +1892,9 @@ public class AlarmActivity extends Activity {
 
 
 	
-	public static void ReflashStockPrice(ListView lv, List<SinaStockInfo> stockinfos) {
+		public static void ReflashStockPrice(ListView lv, List<SinaStockInfo> stockinfos) {
 		// TODO Auto-generated method stub
+		boolean has_fetched_price = true;  // 标记已成功获取过价格
 		if( null == lv || null == stockinfos )
 		{
 			Log.e("reflash", "ReflashStockPrice para err");
@@ -1907,9 +1908,14 @@ public class AlarmActivity extends Activity {
 			return;
 		}
 		
-		// 创建股票名称到价格信息的映射
+		// 创建查询代码到价格信息的映射（用代码匹配，避免除权改名后匹配不上）
 		java.util.HashMap<String, SinaStockInfo> priceMap = new java.util.HashMap<String, SinaStockInfo>();
 		for (SinaStockInfo info : stockinfos) {
+			String queryCode = info.getCode();
+			if (queryCode != null) {
+				priceMap.put(queryCode, info);
+			}
+			// 也保留名称匹配作为兜底
 			priceMap.put(info.getName(), info);
 		}
 		
@@ -1919,27 +1925,30 @@ public class AlarmActivity extends Activity {
 			@SuppressWarnings("unchecked")
 			HashMap<String, Object> item = (HashMap<String, Object>)adapter.getItem(i);
 			if (item != null) {
+				String stockCode = (String)item.get("code");
 				String stockName = (String)item.get("name");
-				if (stockName != null) {
-					SinaStockInfo priceInfo = priceMap.get(stockName);
-					if (priceInfo != null) {
-						// 更新价格
-						String newPrice = String.format("%.2f", priceInfo.getNowPrice());
-						String oldPrice = (String)item.get("price");
-						if (!newPrice.equals(oldPrice)) {
-							item.put("price", newPrice);
-							// “高价/低价”为预警阈值，不随行情刷新覆盖
-							// 更新当前涨幅（相对昨收），保留 1 位小数
-							float yesterdayPrice = priceInfo.getYestodayPrice();
-							float nowPrice = priceInfo.getNowPrice();
-							if (yesterdayPrice > 0) {
-								float changePercent = ((nowPrice - yesterdayPrice) / yesterdayPrice) * 100;
-								item.put("chg", String.format("%.1f", changePercent));
-							} else {
-								item.put("chg", "0.0");
-							}
-							dataChanged = true;
+				// 优先用代码匹配，兜底用名称匹配
+				SinaStockInfo priceInfo = (stockCode != null) ? priceMap.get(stockCode) : null;
+				if (priceInfo == null && stockName != null) {
+					priceInfo = priceMap.get(stockName);
+				}
+				if (priceInfo != null) {
+					// 更新价格
+					String newPrice = String.format("%.2f", priceInfo.getNowPrice());
+					String oldPrice = (String)item.get("price");
+					if (!newPrice.equals(oldPrice)) {
+						item.put("price", newPrice);
+						// "高价/低价"为预警阈值，不随行情刷新覆盖
+						// 更新当前涨幅（相对昨收），保留 1 位小数
+						float yesterdayPrice = priceInfo.getYestodayPrice();
+						float nowPrice = priceInfo.getNowPrice();
+						if (yesterdayPrice > 0) {
+							float changePercent = ((nowPrice - yesterdayPrice) / yesterdayPrice) * 100;
+							item.put("chg", String.format("%.1f", changePercent));
+						} else {
+							item.put("chg", "0.0");
 						}
+						dataChanged = true;
 					}
 				}
 			}
@@ -1950,22 +1959,14 @@ public class AlarmActivity extends Activity {
 			lv.post(new Runnable() {
 				@Override
 				public void run() {
+					// 适配器会从Tag中获取数据源，所以只需要告诉适配器数据变了
 					try {
-						// 重新排序：对同一份数据源排序，避免重建列表导致跳动
-						Context ctx = lv.getContext();
-						if (ctx instanceof AlarmActivity) {
-							AlarmActivity act = (AlarmActivity) ctx;
-							@SuppressWarnings("unchecked")
-							List<HashMap<String, Object>> data = (List<HashMap<String, Object>>) lv.getTag();
-							if (data != null) {
-								act.applySortIfNeeded(data);
-								act.realignHighlightAfterSort(data);
-							}
-							act.updateSortHeaderUI();
+						if (lv.getAdapter() instanceof android.widget.BaseAdapter) {
+							((android.widget.BaseAdapter) lv.getAdapter()).notifyDataSetChanged();
 						}
-					} catch (Exception ignore) {
+					} catch (Exception e) {
+						Log.e("reflash", "notifyDataSetChanged error: " + e.getMessage(), e);
 					}
-					adapter.notifyDataSetChanged();
 				}
 			});
 		}

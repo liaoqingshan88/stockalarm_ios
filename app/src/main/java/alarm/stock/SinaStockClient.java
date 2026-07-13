@@ -337,6 +337,9 @@ public final class SinaStockClient {
 			if (digits.startsWith("6")) {
 				return "sh" + digits;
 			}
+			if (digits.startsWith("4") || digits.startsWith("8") || digits.startsWith("920")) {
+				return "bj" + digits;
+			}
 			return "sz" + digits;
 		}
 		if (digits.length() >= 1 && digits.length() <= 5) {
