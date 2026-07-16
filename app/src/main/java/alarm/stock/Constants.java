@@ -20,7 +20,7 @@ public interface Constants extends BaseColumns {
 	/** Called when the activity is first created. */
 
 	String DB_NAME = "alarm.stock.ipdiy";
-	int DB_VERSION = 5;
+	int DB_VERSION = 7;
 	String TABLE_NAME = "stock_info";
 	String F_CODE = "code";
 	String F_NAME = "name";
@@ -40,8 +40,41 @@ public interface Constants extends BaseColumns {
 		F_DROP + " tinyint, " + 
 		F_VALID + " tinyint)";
 
+	// 均线价格表（ma_price）
+	String TABLE_MA_PRICE = "ma_price";
+	String MA_F_CODE = "code";
+	String MA_F_PERIOD = "period";  // 周期：5, 10, 20, 30, 60, 120, 250
+	String MA_F_PRICE = "price";    // 对应的均线价格
+
+	String TABLE_MA_CREATE = "CREATE TABLE " +
+		TABLE_MA_PRICE + "(" + _ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
+		MA_F_CODE + " TEXT," +
+		MA_F_PERIOD + " INTEGER," +
+		MA_F_PRICE + " REAL)";
+
+	// 均线报警日志表（ma_alarm_log）
+	String TABLE_MA_ALARM_LOG = "ma_alarm_log";
+	String MA_ALARM_F_ID = "_id";
+	String MA_ALARM_F_CODE = "code";
+	String MA_ALARM_F_PERIOD = "period";
+	String MA_ALARM_F_TYPE = "type";
+	String MA_ALARM_F_MA_PRICE = "ma_price";
+	String MA_ALARM_F_NOW_PRICE = "now_price";
+	String MA_ALARM_F_DATE = "alarm_date";
+	String MA_ALARM_F_TIME = "alarm_time";
+
+	String TABLE_MA_ALARM_LOG_CREATE = "CREATE TABLE " +
+		TABLE_MA_ALARM_LOG + "(" + MA_ALARM_F_ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
+		MA_ALARM_F_CODE + " TEXT," +
+		MA_ALARM_F_PERIOD + " INTEGER," +
+		MA_ALARM_F_TYPE + " INTEGER," +
+		MA_ALARM_F_MA_PRICE + " REAL," +
+		MA_ALARM_F_NOW_PRICE + " REAL," +
+		MA_ALARM_F_DATE + " TEXT," +
+		MA_ALARM_F_TIME + " INTEGER)";
+
 	//pubilc static final String[] = FROM={_ID,F_CODE,F_NAME};
-	String list_title = "名称      现价    最高价   最低价  涨幅  跌幅";
+	String list_title = "名称      现价    最高价   最低价  涨  跌";
 
 	int ADD_RESULT_OK = 0;
 	int ADD_RESULT_EXIST = 1;

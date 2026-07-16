@@ -24,8 +24,8 @@ android {
         applicationId "yanhexing.stock.alarm"  // 包名
         minSdk 28      // 最低支持 Android  P (API 28)
         targetSdk 28   // 目标 Android P (API 28)
-        versionCode 229
-        versionName "2.38.0"
+        versionCode 303
+        versionName "3.0.3"
         
         // 配置支持的CPU架构（Android P要求必须支持64位）
         ndk {

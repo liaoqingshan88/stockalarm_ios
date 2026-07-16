@@ -2,8 +2,6 @@ package alarm.stock;
 
 import java.util.List;
 
-//import org.apache.commons.httpclient.HttpException;
-
 import android.os.AsyncTask;
 import android.util.Log;
 import android.widget.ListView;
@@ -38,19 +36,21 @@ class Compare extends AsyncTask<StockMng, TextView, List<SinaStockInfo>>{
     String[] codes = null;
     StockMng stockMng = null;
     AlarmActivity act = null;
+    MaPriceMng maMng = null;
+    MaAlarmLogMng maAlarmLogMng = null;
     
-    public Compare(AlarmActivity act,TextView te, ListView listview) {
+    public Compare(AlarmActivity act,TextView te, ListView listview, MaPriceMng maMng, MaAlarmLogMng maAlarmLogMng) {
         super();
         this.te = te;
         this.listview = listview;
         this.act = act;
-        //te.append("init ");
+        this.maMng = maMng;
+        this.maAlarmLogMng = maAlarmLogMng;
     }
 
    @Override
     protected List<SinaStockInfo> doInBackground(StockMng... params)  {
 	   try {
-        // TODO Auto-generated method stub
 		   System.out.println("do enter");
 		   this.stockMng = params[0];
 		   if(null == this.stockMng )
@@ -66,19 +66,14 @@ class Compare extends AsyncTask<StockMng, TextView, List<SinaStockInfo>>{
 		   return stockinfo;
 	   }
 		catch (Exception e) {
-			//eView.setText("cmp "+e.toString());//超时不输出
-
 			 System.out.println("do return failed");
 			return null;
 		}
-	   // publishProgress(te);
-		//System.out.println("do return imposible");
     }
    
    //finished
    @Override
     protected void onPostExecute(List<SinaStockInfo> result){
-        // TODO Auto-generated method stub
 		try{
 		    super.onPostExecute(result);
 	        if( null == result )
@@ -88,8 +83,8 @@ class Compare extends AsyncTask<StockMng, TextView, List<SinaStockInfo>>{
 	        }
 	        
 	        AlarmActivity.is_http_timeout = false;
-	        AlarmActivity.ReflashStockPrice(listview, result);
-	        AlarmInfo alarmInfo = compareAllStocks(stockMng, result);
+	        act.ReflashStockPrice(listview, result);
+	        AlarmInfo alarmInfo = compareAllStocks(stockMng, result, maMng, maAlarmLogMng);
 			if( alarmInfo != null && alarmInfo.message.length() > 0 )
 			{
 				te.append("\n"+alarmInfo.message);
@@ -100,25 +95,24 @@ class Compare extends AsyncTask<StockMng, TextView, List<SinaStockInfo>>{
      	}catch (Exception e) {
      		Log.e("onPostExecute", "error: " + e.getMessage(), e);
      	}
-		//System.out.println("postExecute---double---"+result);
     }
 
-   	//prepare
    @Override
     protected void onPreExecute() {
-        // TODO Auto-generated method stub\
-        //System.out.println("pretExecute------");
         super.onPreExecute();
     }
 
    @Override
     protected void onProgressUpdate(TextView... values) {
-        // TODO Auto-generated method stub
-      // super.onProgressUpdate(values);
     }
    
 
-	public static AlarmInfo compareAllStocks(StockMng stockMng, List<SinaStockInfo>  stockinfo ) {
+	/**
+	 * 均线名称数组，与 MaPriceMng.MA_PERIODS 对应。
+	 */
+	private static final String[] MA_NAMES = {"MA5", "MA10", "MA20", "MA30", "MA60", "MA120", "MA250"};
+
+	public static AlarmInfo compareAllStocks(StockMng stockMng, List<SinaStockInfo>  stockinfo, MaPriceMng maMng, MaAlarmLogMng maAlarmLogMng ) {
 		try{
 				
 			List<StockMng> listStocks = stockMng.getStocks();
@@ -132,28 +126,105 @@ class Compare extends AsyncTask<StockMng, TextView, List<SinaStockInfo>>{
 				}
 				if( j>= stockinfo.size() )
 				{
-					//在运行中添加股票，可能出现列表中股票数大于已经取得的股票信息数，就需要跳过此次，下次循环就取到新的股价了。2013.5.18
 					break;
 				}
 				SinaStockInfo stock1 = stockinfo.get(j++);
 				int ret = stock.Compare(stock1.getNowPrice(), stock1.getYestodayPrice());
 
 				if( CMP_RESULT_NONE != ret ) {
-					// 返回预警信息，包含消息、股票索引和股票代码
 					return new AlarmInfo(stock1.getName()+"-"+stock.GetCmpareResult(), i, stock.GetCode());
 				}
 
+				// 均线预警检查
+				if (maMng != null) {
+					String maAlarm = checkMaAlarm(stock.GetCode(), stock1.getNowPrice(), stock1.getYestodayPrice(), maMng, maAlarmLogMng);
+					if (maAlarm != null) {
+						return new AlarmInfo(stock1.getName() + "-" + maAlarm, i, stock.GetCode());
+					}
+				}
 			}
-
 
 			return null;
 		}
 		catch (Exception e)
 		{
 			Log.e("compareAllStocks", "error: " + e.getMessage(), e);
-			
 			return null;
 		}
+	}
+
+	/**
+	 * 检查某支股票的均线价格预警。
+	 * 当股价突破（上穿或下穿）某条均线时触发预警。
+	 *
+	 * @param code 股票代码
+	 * @param nowPrice 当前价
+	 * @param yestodayPrice 昨收价
+	 * @param maMng MaPriceMng 实例
+	 * @return 预警消息，无触发则返回 null
+	 */
+	private static String checkMaAlarm(String code, float nowPrice, float yestodayPrice, MaPriceMng maMng, MaAlarmLogMng maAlarmLogMng) {
+		if (maMng == null) return null;
+		try {
+			float[] maPrices = maMng.getMaPrices(code);
+			if (maPrices == null) return null;
+
+			// 价格不能为0
+			if (nowPrice < 0.00001f) return null;
+
+			// 当天日期字符串 yyyyMMdd
+			java.text.SimpleDateFormat dateFormat = new java.text.SimpleDateFormat("yyyyMMdd");
+			String todayStr = dateFormat.format(new java.util.Date());
+
+			StringBuilder alarmMsg = new StringBuilder();
+
+			for (int i = 0; i < MaPriceMng.MA_PERIODS.length; i++) {
+				float ma = maPrices[i];
+				if (ma < 0) continue; // 无数据
+
+				int period = MaPriceMng.MA_PERIODS[i];
+				String maName = MA_NAMES[i];
+
+				// 上穿 MA：昨收低于 MA，现价达到或超过 MA
+				boolean crossUp = (yestodayPrice < ma && nowPrice >= ma);
+
+				// 下穿 MA：昨收高于 MA，现价达到或低于 MA
+				boolean crossDown = (yestodayPrice > ma && nowPrice <= ma);
+
+				if (crossUp) {
+					// 去重：当天是否已报过该股票的该均线上穿
+					if (maAlarmLogMng != null && maAlarmLogMng.isAlreadyAlarmedToday(code, period, 1, todayStr)) {
+						continue;
+					}
+					float diff = ((nowPrice - ma) / ma) * 100;
+					if (alarmMsg.length() > 0) alarmMsg.append("; ");
+					alarmMsg.append("上穿" + maName + "(" + String.format("%.2f,%.1f%%", ma, diff) + ")");
+					// 记录报警日志
+					if (maAlarmLogMng != null) {
+						maAlarmLogMng.recordAlarm(code, period, 1, ma, nowPrice, todayStr);
+					}
+				} else if (crossDown) {
+					// 去重：当天是否已报过该股票的该均线下穿
+					if (maAlarmLogMng != null && maAlarmLogMng.isAlreadyAlarmedToday(code, period, 2, todayStr)) {
+						continue;
+					}
+					float diff = ((ma - nowPrice) / ma) * 100;
+					if (alarmMsg.length() > 0) alarmMsg.append("; ");
+					alarmMsg.append("下穿" + maName + "(" + String.format("%.2f,%.1f%%", ma, diff) + ")");
+					// 记录报警日志
+					if (maAlarmLogMng != null) {
+						maAlarmLogMng.recordAlarm(code, period, 2, ma, nowPrice, todayStr);
+					}
+				}
+			}
+
+			if (alarmMsg.length() > 0) {
+				return alarmMsg.toString();
+			}
+		} catch (Exception e) {
+			Log.e("compareAllStocks", "MA alarm check failed: " + e.getMessage(), e);
+		}
+		return null;
 	}
 
 

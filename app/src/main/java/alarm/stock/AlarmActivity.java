@@ -116,6 +116,10 @@ public class AlarmActivity extends Activity {
 	private Activity m_activity = this;
 	private SinaStockClient mClient;
 	StockMng m_stockMng;
+	private MaPriceMng m_maMng;
+	private MaDownloader m_maDownloader;
+	private MaAlarmLogMng m_maAlarmLogMng;
+	private static boolean maDataRefreshedToday = false;
 	static  boolean is_first_run = true;
 	static boolean is_notified = false;
 	static boolean is_http_timeout = false;
@@ -256,6 +260,9 @@ public class AlarmActivity extends Activity {
         enter_time = StockTime.GetCurTime();
 		mySqlite = new StockSQLite(this, DB_NAME, null, DB_VERSION);
 		m_stockMng = new StockMng(mySqlite);
+		m_maMng = new MaPriceMng(mySqlite);
+		m_maDownloader = new MaDownloader();
+		m_maAlarmLogMng = new MaAlarmLogMng(mySqlite);
 		//ListView list = (ListView) findViewById(R.id.ListView01);
 		createListView(m_stockMng.getStocks());
 
@@ -421,8 +428,17 @@ public class AlarmActivity extends Activity {
 					//*/
 					check_count_down = check_inter;
 
-					Compare cmp = new Compare((AlarmActivity)m_activity, eView, listview);				 
-		 			cmp.execute(m_stockMng);
+					Compare cmp = new Compare((AlarmActivity)m_activity, eView, listview, m_maMng, m_maAlarmLogMng);
+					cmp.execute(m_stockMng);
+
+					// 每30分钟刷新一次均线数据
+					if (!maDataRefreshedToday || check_inter > 5) {
+						// 首次运行或网络恢复后刷新均线
+						refreshMaDataForAllStocks();
+						maDataRefreshedToday = true;
+					} else if (check_count_down % 360 == 0) {
+						refreshMaDataForAllStocks();
+					}
 
 					System.out.println("timeout " +is_http_timeout +"T"+ err_times + "times");
 					if( is_http_timeout )
@@ -536,6 +552,22 @@ public class AlarmActivity extends Activity {
 							final SinaStockInfo stock1 = stockinfo.get(0);
 							stockMng.Set(code,stock1.getName(), price_h, price_l, rise, drop_, true);
 							stockMng.Add();
+
+							// 添加股票后自动下载均线数据
+							final String newCodeForMa = code;
+							new Thread(new Runnable() {
+								@Override
+								public void run() {
+									try {
+										float[] mas = m_maDownloader.downloadAndCalculateMAs(newCodeForMa);
+										if (mas != null) {
+											m_maMng.saveMaPrices(newCodeForMa, mas);
+										}
+									} catch (Exception e) {
+										android.util.Log.e("addStock", "MA download failed: " + e.getMessage(), e);
+									}
+								}
+							}).start();
 							
 							// 获取所有股票的当前价格
 							List<SinaStockInfo> allStockInfo = null;
@@ -874,7 +906,15 @@ public class AlarmActivity extends Activity {
 				startActivity(intent);
 			}
 		});
-		
+
+		//历史消息按钮
+		Button btn_history = (Button)findViewById(R.id.btn_history);
+		btn_history.setOnClickListener(new View.OnClickListener() {
+			public void onClick(View v) {
+				Intent intent = new Intent(AlarmActivity.this, AlarmHistoryActivity.class);
+				startActivity(intent);
+			}
+		});
 		
 	}
 
@@ -1640,6 +1680,33 @@ public class AlarmActivity extends Activity {
 			}
 		}
 	}
+	/**
+	 * 刷新所有有效股票的均线数据（在后台线程中执行）。
+	 */
+	private void refreshMaDataForAllStocks() {
+		final String[] codes = m_stockMng.GetCodes();
+		if (codes == null || codes.length == 0) return;
+		
+		new Thread(new Runnable() {
+			@Override
+			public void run() {
+				try {
+					for (String code : codes) {
+						if (code == null || code.isEmpty()) continue;
+						float[] mas = m_maDownloader.downloadAndCalculateMAs(code);
+						if (mas != null) {
+							m_maMng.saveMaPrices(code, mas);
+						}
+						// 避免请求过快
+						try { Thread.sleep(500); } catch (InterruptedException ie) {}
+					}
+					android.util.Log.i("refreshMaData", "均线数据刷新完成");
+				} catch (Exception e) {
+					android.util.Log.e("refreshMaData", "刷新均线数据失败: " + e.getMessage(), e);
+				}
+			}
+		}).start();
+	}
 
 	void createListView(List<StockMng> list_stock) {
 		createListView(list_stock, null);
@@ -1892,7 +1959,7 @@ public class AlarmActivity extends Activity {
 
 
 	
-		public static void ReflashStockPrice(ListView lv, List<SinaStockInfo> stockinfos) {
+		public void ReflashStockPrice(ListView lv, List<SinaStockInfo> stockinfos) {
 		// TODO Auto-generated method stub
 		boolean has_fetched_price = true;  // 标记已成功获取过价格
 		if( null == lv || null == stockinfos )
@@ -1956,6 +2023,13 @@ public class AlarmActivity extends Activity {
 		
 		// 如果数据有变化，通知适配器刷新（并在需要时重新排序）
 		if (dataChanged) {
+			// 如果启用了排序，先重新排序
+			@SuppressWarnings("unchecked")
+			List<HashMap<String, Object>> listData = (List<HashMap<String, Object>>) lv.getTag();
+			if (listData != null) {
+				applySortIfNeeded(listData);
+				realignHighlightAfterSort(listData);
+			}
 			lv.post(new Runnable() {
 				@Override
 				public void run() {
@@ -1987,20 +2061,32 @@ public class AlarmActivity extends Activity {
 			if (hPrice != null) lastHeaderPriceBaseText = String.valueOf(hPrice.getText());
 			if (hChg != null) lastHeaderChgBaseText = String.valueOf(hChg.getText());
 
+			// Set click listener on both the label TextView and its parent LinearLayout
+			// so clicking anywhere in the column area triggers sort
+			View.OnClickListener nameClick = new View.OnClickListener() {
+				@Override public void onClick(View v) { onSortHeaderClicked(SortColumn.NAME); }
+			};
+			View.OnClickListener priceClick = new View.OnClickListener() {
+				@Override public void onClick(View v) { onSortHeaderClicked(SortColumn.PRICE); }
+			};
+			View.OnClickListener chgClick = new View.OnClickListener() {
+				@Override public void onClick(View v) { onSortHeaderClicked(SortColumn.CHG); }
+			};
+			
 			if (hName != null) {
-				hName.setOnClickListener(new View.OnClickListener() {
-					@Override public void onClick(View v) { onSortHeaderClicked(SortColumn.NAME); }
-				});
+				hName.setOnClickListener(nameClick);
+				View parent = (View) hName.getParent();
+				if (parent != null) parent.setOnClickListener(nameClick);
 			}
 			if (hPrice != null) {
-				hPrice.setOnClickListener(new View.OnClickListener() {
-					@Override public void onClick(View v) { onSortHeaderClicked(SortColumn.PRICE); }
-				});
+				hPrice.setOnClickListener(priceClick);
+				View parent = (View) hPrice.getParent();
+				if (parent != null) parent.setOnClickListener(priceClick);
 			}
 			if (hChg != null) {
-				hChg.setOnClickListener(new View.OnClickListener() {
-					@Override public void onClick(View v) { onSortHeaderClicked(SortColumn.CHG); }
-				});
+				hChg.setOnClickListener(chgClick);
+				View parent = (View) hChg.getParent();
+				if (parent != null) parent.setOnClickListener(chgClick);
 			}
 			updateSortHeaderUI();
 		} catch (Exception e) {

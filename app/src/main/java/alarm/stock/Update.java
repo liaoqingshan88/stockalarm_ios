@@ -78,10 +78,11 @@ public class Update extends Activity {
 	private boolean request_update;
 	
 	// 新的API服务器地址
-	// 后台页面见：`http://www.yanhexing.com:9000/`
-	private static final String API_BASE_URL = "http://www.yanhexing.com:9000";
-	// 备用地址：当域名被运营商/云厂商拦截（例如 ICP/备案拦截页）时兜底使用
-	private static final String API_BASE_URL_FALLBACK = "http://47.107.180.174:9000";
+	// 后台页面见：`http://47.107.180.174:9000/`
+	// 优先使用IP直连以避免ICP/备案拦截；域名作为备用
+	private static final String API_BASE_URL = "http://47.107.180.174:9000";
+	// 备用地址：域名，当IP不可用时尝试
+	private static final String API_BASE_URL_FALLBACK = "http://www.yanhexing.com:9000";
 	private static final String API_VERSION_URL = API_BASE_URL + "/api/version";
 	private static final String API_DOWNLOAD_URL = API_BASE_URL + "/download/app.apk";
 	private static final String API_DOWNLOAD_URL_FALLBACK = API_BASE_URL_FALLBACK + "/download/app.apk";
@@ -379,10 +380,14 @@ public class Update extends Activity {
 			Log.w(TAG, "删除旧安装包失败: " + myTempFile.getAbsolutePath());
 		}
 
+		// 保存原始下载地址，用于ICP拦截时切换备用
+		final String originalPath = strPath;
+		String currentPath = strPath;
+
 		final int maxAttempts = 3;
 		Exception lastError = null;
 		for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-			long totalBytes = fetchRemoteFileSize(strPath);
+			long totalBytes = fetchRemoteFileSize(currentPath);
 			HttpURLConnection conn = null;
 			InputStream is = null;
 			FileOutputStream fos = null;
@@ -392,8 +397,8 @@ public class Update extends Activity {
 				if (attempt > 1 && myTempFile.exists()) {
 					myTempFile.delete();
 				}
-				Log.i(TAG, "UPDATE_DOWNLOAD_START: attempt=" + attempt + "/" + maxAttempts + ", url=" + strPath);
-				URL url = new URL(strPath);
+				Log.i(TAG, "UPDATE_DOWNLOAD_START: attempt=" + attempt + "/" + maxAttempts + ", url=" + currentPath);
+				URL url = new URL(currentPath);
 				conn = (HttpURLConnection) url.openConnection();
 				conn.setConnectTimeout(25000);
 				conn.setReadTimeout(180000);
@@ -404,7 +409,33 @@ public class Update extends Activity {
 
 				int code = conn.getResponseCode();
 				if (code != HttpURLConnection.HTTP_OK) {
-					throw new RuntimeException("下载响应异常，HTTP状态码: " + code);
+					// 域名被ICP/备案拦截时可能返回403/302或自定义页面
+					// 检测到非200且使用的是域名地址时，切换到备用IP重试
+					boolean shouldUseFallback = (currentPath != null && currentPath.contains("yanhexing.com"));
+					if (shouldUseFallback && attempt == 1) {
+						currentPath = currentPath.replace("http://www.yanhexing.com:9000", "http://47.107.180.174:9000");
+						currentPath = currentPath.replace("www.yanhexing.com:9000", "47.107.180.174:9000");
+						Log.w(TAG, "下载被拦截(HTTP " + code + ")，切换到备用IP: " + currentPath);
+						showStatusFor5s("下载域名异常，已切换备用地址(HTTP " + code + ")");
+					} else {
+						throw new RuntimeException("下载响应异常，HTTP状态码: " + code);
+					}
+				}
+				
+				// 检查服务器响应内容是否为ICP/备案拦截页（非APK内容）
+				String contentType = conn.getContentType();
+				if (contentType != null && !contentType.isEmpty()) {
+					String ct = contentType.toLowerCase(Locale.ROOT);
+					if (ct.contains("text/html") || ct.contains("text/plain")) {
+						// 可能被拦截了，尝试读取一小部分内容判断
+						boolean isApiUrlUsed = (currentPath != null && currentPath.contains("yanhexing.com"));
+						if (isApiUrlUsed && attempt == 1) {
+							currentPath = currentPath.replace("http://www.yanhexing.com:9000", "http://47.107.180.174:9000");
+							currentPath = currentPath.replace("www.yanhexing.com:9000", "47.107.180.174:9000");
+							Log.w(TAG, "下载返回非APK内容类型(" + ct + ")，切换到备用IP: " + currentPath);
+							showStatusFor5s("下载域名异常，已切换备用地址");
+						}
+					}
 				}
 
 				if (totalBytes <= 0) {
@@ -1028,7 +1059,17 @@ public class Update extends Activity {
 					boolean looksLikeHtml = respLower.contains("<html") || respLower.contains("<!doctype html");
 					boolean looksLikeIcpBlock = respLower.contains("non-compliance icp filing")
 							|| respLower.contains("beian-block")
-							|| respLower.contains("aliyun.com/beian");
+							|| respLower.contains("aliyun.com/beian")
+							|| respLower.contains("beian.miit.gov.cn")
+							|| respLower.contains("关于域名备案")    // 阿里云/腾讯云的备案拦截
+							|| respLower.contains("未备案")         // "该域名未备案"
+							|| respLower.contains("备案信息")       // "您的备案信息已过期"
+							|| respLower.contains("网站暂时无法访问")
+							|| respLower.contains("该站点未备案")
+							|| respLower.contains("没有找到站点")
+							|| respLower.contains("页面不存在")
+							|| respLower.contains("404 not found")
+							|| respLower.contains("403 forbidden");
 					if (looksLikeHtml || looksLikeIcpBlock) {
 						if (urlString != null && urlString.contains(API_BASE_URL) && !urlString.contains(API_BASE_URL_FALLBACK)) {
 							urlString = urlString.replace(API_BASE_URL, API_BASE_URL_FALLBACK);

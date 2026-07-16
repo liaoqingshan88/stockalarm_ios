@@ -13,40 +13,38 @@ import android.database.sqlite.SQLiteOpenHelper;
 
 import static alarm.stock.Constants.*;
 
-//import static android.provider.BaseColumns._ID;
-
-//import android.database.sqlite.SQLiteOpenHelper;
-
 
 /**
  * @author ipdiy
  *
  */
 public class StockSQLite extends SQLiteOpenHelper {
-	// private static final String DATABASE_NAME = DB_NAME;
-
-	//private static final int DB_VERSION = 1;
 
 	public StockSQLite(Context context, String name, CursorFactory factory, int version) {
 		super(context, name, factory, version);
-		// TODO Auto-generated constructor stub
-	}
-	/*
-	public StockSQLite(Context context) {
-	       super(context, DATABASE_NAME, factory, DATABASE_VERSION);
-	       // TODO Auto-generated constructor stub
-	}   */
-	@Override
-	public void onCreate(SQLiteDatabase db) {
-		// TODO Auto-generated method stub
-		db.execSQL(TABLE_CREATE);
 	}
 
+	@Override
+	public void onCreate(SQLiteDatabase db) {
+		db.execSQL(TABLE_CREATE);
+		db.execSQL(TABLE_MA_CREATE);
+		db.execSQL(TABLE_MA_ALARM_LOG_CREATE);
+	}
 
 	@Override
 	public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-		// TODO Auto-generated method stub
-		db.execSQL("DROP TABLE IF EXISTS " + TABLE_NAME);
-		onCreate(db);
+		if (oldVersion < 6) {
+			// 版本 5→6：新增 ma_price 表
+			db.execSQL(TABLE_MA_CREATE);
+		}
+		if (oldVersion < 7) {
+			// 版本 6→7：新增 ma_alarm_log 表
+			db.execSQL(TABLE_MA_ALARM_LOG_CREATE);
+		}
+		if (oldVersion < 5) {
+			// 老版本直接重建
+			db.execSQL("DROP TABLE IF EXISTS " + TABLE_NAME);
+			onCreate(db);
+		}
 	}
 }
