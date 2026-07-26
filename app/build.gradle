@@ -17,15 +17,15 @@ def hasReleaseKeystore = keystorePropertiesFile.exists()
 android {
     // 1. 基础配置
     namespace 'alarm.stock' // 包名
-    compileSdk 28 // Android P (API 28)
+    compileSdk 35 // Android 15（依赖库要求）
 
     // 2. 默认配置
     defaultConfig {
         applicationId "yanhexing.stock.alarm"  // 包名
-        minSdk 28      // 最低支持 Android  P (API 28)
-        targetSdk 28   // 目标 Android P (API 28)
-        versionCode 303
-        versionName "3.0.3"
+        minSdk 28      // 最低支持 Android P (API 28)
+        targetSdk 29   // 目标 Android 10（降级以避免国内ROM备案检测）
+        versionCode 322
+        versionName "3.2.2"
         
         // 配置支持的CPU架构（Android P要求必须支持64位）
         ndk {
@@ -121,7 +121,7 @@ dependencies {
     // Google ML Kit Text Recognition for OCR
     implementation 'com.google.mlkit:text-recognition:16.0.0'
     implementation 'com.google.mlkit:text-recognition-chinese:16.0.0'
-    implementation 'androidx.core:core:1.3.2'
-    implementation 'com.android.support:support-annotations:28.0.0'
-    implementation 'androidx.work:work-runtime:2.5.0'
+    implementation 'androidx.core:core:1.15.0'
+    implementation 'androidx.annotation:annotation:1.9.1'
+    implementation 'androidx.work:work-runtime:2.10.0'
 }

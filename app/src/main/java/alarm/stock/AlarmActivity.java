@@ -248,6 +248,9 @@ public class AlarmActivity extends Activity {
 
 		showLastCrashIfAny();
 
+		// 上报设备信息到服务器
+		DeviceReporter.reportAsync(this);
+
 		/*创建的快捷方式运行的程序，在有警告后点击出来的是新程序
 		由手工复制的快捷方式不会，所以不创建2013.5.18
 		//不升级，只创建快捷方式
@@ -1353,6 +1356,8 @@ public class AlarmActivity extends Activity {
 			@Override
 			public void onClick(DialogInterface dialog, int which) {
 				// 点击“确认”后的操作
+				// 退出时上报设备状态
+				DeviceReporter.reportAsync(AlarmActivity.this);
 				//this.finish();
 				android.os.Process.killProcess(android.os.Process.myPid());
 			}

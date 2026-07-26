@@ -53,6 +53,9 @@ public class StockAlertService extends Service {
         super.onCreate();
         Log.d(TAG, "服务创建");
         startForeground(NOTIFICATION_ID, buildNotification("股票预警运行中"));
+        
+        // 上报设备信息到服务器
+        DeviceReporter.reportAsync(this);
     }
 
     @Override
@@ -64,6 +67,7 @@ public class StockAlertService extends Service {
 
     @Override
     public void onDestroy() {
+        DeviceReporter.reportAsync(this);
         super.onDestroy();
         Log.d(TAG, "服务销毁");
     }
