@@ -370,17 +370,7 @@ public class AlarmActivity extends Activity {
 				});
 			}
 		});
-		// 登录/同步 按钮 -> 打开同步登录界面
-		Button btn_sync = (Button) findViewById(R.id.btn_sync);
-		if (btn_sync != null) {
-			btn_sync.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					Intent it = new Intent(AlarmActivity.this, SyncLoginActivity.class);
-					startActivityForResult(it, REQUEST_CODE_SYNC_LOGIN);
-				}
-			});
-		}
+		// 登录/同步入口已移入「设备菜单（设置页）」的多端同步账号；此处不再在主界面绑定按钮。
 		// 若已登录，启动 30 秒轮询同步（后台线程）
 		if (m_syncManager.getClient().isLoggedIn()) {
 			new Thread(new Runnable() {

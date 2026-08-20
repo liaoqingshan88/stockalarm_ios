@@ -363,16 +363,6 @@
 				android:paddingLeft="8dp"
 				android:paddingRight="8dp" />
 
-			<Button
-				android:id="@+id/btn_sync"
-				android:layout_width="wrap_content"
-				android:layout_height="fill_parent"
-				android:text="登录/同步"
-				android:textSize="12sp"
-				android:gravity="center"
-				android:paddingLeft="8dp"
-				android:paddingRight="8dp" />
-
 		</LinearLayout>
 
 		<!-- 列标题行 - 使用与列表项相同的布局结构确保对齐 -->

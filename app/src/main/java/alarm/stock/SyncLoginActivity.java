@@ -25,7 +25,6 @@ public class SyncLoginActivity extends Activity {
     private Button btnRegister;
     private TextView btnChangePwd;
     private TextView textStatus;
-    private Button btnLogout;
     private TextView textCurrentAccount;
 
     private SyncManager syncManager;
@@ -48,18 +47,21 @@ public class SyncLoginActivity extends Activity {
         btnRegister = (Button) findViewById(R.id.sync_btn_register);
         btnChangePwd = (TextView) findViewById(R.id.sync_btn_change_pwd);
         textStatus = (TextView) findViewById(R.id.sync_text_status);
-        btnLogout = (Button) findViewById(R.id.sync_btn_logout);
         textAccountInfo = (TextView) findViewById(R.id.sync_text_account);
         textStatus.setMovementMethod(new android.text.method.ScrollingMovementMethod());
 
         // 显示当前登录状态
         refreshAccountUi();
 
-        // 登录
+        // 登录/退出登录（同一按钮切换文字与功能）
         btnLogin.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                doLogin();
+                if (client.isLoggedIn()) {
+                    doLogout();
+                } else {
+                    doLogin();
+                }
             }
         });
 
@@ -79,29 +81,34 @@ public class SyncLoginActivity extends Activity {
             }
         });
 
-        // 退出登录
-        btnLogout.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                client.logout();
-                syncManager.stopPeriodicSync();
-                Toast.makeText(SyncLoginActivity.this, "已退出登录", Toast.LENGTH_SHORT).show();
-                refreshAccountUi();
-                setResult(RESULT_OK);
-            }
-        });
+    }
+
+    // 退出登录（复用"登录"按钮）
+    private void doLogout() {
+        client.logout();
+        syncManager.stopPeriodicSync();
+        Toast.makeText(SyncLoginActivity.this, "已退出登录", Toast.LENGTH_SHORT).show();
+        refreshAccountUi();
+        setBusy(false, "已退出登录");
+        setResult(RESULT_OK);
     }
 
     private void refreshAccountUi() {
         if (client.isLoggedIn()) {
             textAccountInfo.setText("当前账号：" + client.getPhone() + "\n已开启多端同步");
-            editPhone.setHint("");
-            editPassword.setHint("");
-            btnLogout.setVisibility(View.VISIBLE);
+            editPhone.setHint("请输入手机号");
+            editPassword.setHint("请输入密码");
+            btnLogin.setText("退出登录");
+            btnLogin.setBackgroundColor(0xFFFAFAFA);
+            btnLogin.setTextColor(0xFFD32F2F);
             btnChangePwd.setVisibility(View.VISIBLE);
         } else {
             textAccountInfo.setText("未登录\n登录后股票列表与报警配置将在多端同步");
-            btnLogout.setVisibility(View.GONE);
+            editPhone.setHint("请输入手机号");
+            editPassword.setHint("请输入密码");
+            btnLogin.setText("登录");
+            btnLogin.setBackgroundColor(0xFF4CAF50);
+            btnLogin.setTextColor(0xFFFFFFFF);
             btnChangePwd.setVisibility(View.GONE);
         }
     }
