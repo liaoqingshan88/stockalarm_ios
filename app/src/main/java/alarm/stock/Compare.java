@@ -293,7 +293,23 @@ class PeakValleyTracker {
 
 
 class Compare extends AsyncTask<StockMng, TextView, List<SinaStockInfo>>{
-   
+
+    // ===== 同步后报警节流门（问题2：先刷新价格/更新界面，再报警）=====
+    // 当 sync 拉取/写入新增了股票（收到另一端同步设置的股票预警）时，记录时间戳；
+    // 后台保活预警在随后一小段窗口内跳过报警检查，让 UI 先刷新价格并展示，避免“收到同步数据立即使报警”。
+    private static final long SYNC_ALARM_GATE_MS = 10_000L; // 同步后 10 秒内不触发后台报警
+    private static volatile long lastSyncNewStockMs = 0L;
+
+    /** 标记：刚刚通过同步新增了股票（另一端同步过来的），后台报警应短暂让路给 UI 刷新。 */
+    public static void markSyncNewStock() {
+        lastSyncNewStockMs = System.currentTimeMillis();
+    }
+
+    /** 后台预警检查是否应跳过（同步新数据刚到达、界面价格尚未刷新）。 */
+    public static boolean shouldHoldBackgroundAlarm() {
+        return lastSyncNewStockMs > 0 && (System.currentTimeMillis() - lastSyncNewStockMs) < SYNC_ALARM_GATE_MS;
+    }
+
     TextView te=null;
     ListView listview = null;
     String[] codes = null;
@@ -375,6 +391,14 @@ class Compare extends AsyncTask<StockMng, TextView, List<SinaStockInfo>>{
 	public static AlarmInfo checkAndNotify(android.content.Context ctx, StockMng stockMng, MaPriceMng maMng, MaAlarmLogMng maAlarmLogMng) {
 		try {
 			if (stockMng == null) return null;
+
+			// 问题2：同步刚写入新股票（另一端同步过来的预警设置）时，后台预警让路，
+			// 等 UI 先刷新价格并展示后再检查，避免“收到同步数据立即报警、界面价格却未更新”。
+			if (shouldHoldBackgroundAlarm()) {
+				Log.d("Compare", "同步新数据刚到达，暂缓后台报警检查，等待界面刷新价格");
+				return null;
+			}
+
 			String[] codes = stockMng.GetCodes();
 			if (codes == null || codes.length == 0) return null;
 

@@ -419,6 +419,7 @@ public class SyncManager {
         }
 
         // 2. 写入/更新服务器列表
+        boolean addedNewStock = false;
         for (SyncClient.SyncStock s : serverMap.values()) {
             try {
                 boolean exists = stockExists(stockMng, s.code);
@@ -429,6 +430,7 @@ public class SyncManager {
                 } else {
                     stockMng.Set(s.code, s.name, s.price_h, s.price_l, s.rise, s.drop, s.valid == 1);
                     stockMng.Add();
+                    addedNewStock = true; // 本机原先没有、由另一端同步过来的新股票
                 }
                 // 记录时间戳
                 long serverTs = s.last_modified > 0 ? s.last_modified : System.currentTimeMillis();
@@ -446,6 +448,12 @@ public class SyncManager {
             } catch (Exception e) {
                 Log.w(TAG, "写入本地股票失败: " + s.code, e);
             }
+        }
+
+        // 问题2：同步新增了股票（另一端同步过来的新预警），让后台报警短暂让路，
+        // 等 UI 先刷新价格并展示后再报警，避免“收到同步数据立即报警、界面价格却未更新”。
+        if (addedNewStock) {
+            Compare.markSyncNewStock();
         }
     }
 

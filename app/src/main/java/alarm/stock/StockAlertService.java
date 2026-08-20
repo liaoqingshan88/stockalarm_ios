@@ -47,6 +47,7 @@ public class StockAlertService extends Service {
     private MaPriceMng maMng;
     private MaAlarmLogMng maAlarmLogMng;
     private StockSQLite sqlite;
+    private SyncManager syncManager; // 后台同步轮询（问题3：活动页销毁/应用退到后台时仍持续拉取服务器变更，含另一端删除）
     private PowerManager.WakeLock wakeLock;
 
     private static boolean running = false;
@@ -97,6 +98,21 @@ public class StockAlertService extends Service {
             maMng = new MaPriceMng(sqlite);
             maAlarmLogMng = new MaAlarmLogMng(sqlite);
             PeakValleyTracker.setShlLogMng(new ShlAlarmLogMng(sqlite));
+
+            // 问题3：把多端同步轮询搬到前台服务中，保证退到后台/活动页被回收时
+            // 手机仍持续拉取服务器变更（另一端新增、修改、删除股票，含墓碑删除），
+            // 否则同步轮询只挂在 AlarmActivity，页面一退后台就不再拉取，
+            // 导致“电脑删除股票 → 手机端不消失”。
+            try {
+                syncManager = new SyncManager(this);
+                if (syncManager.getClient().isLoggedIn()) {
+                    syncManager.startPeriodicSync();
+                    Log.i(TAG, "前台服务已启动后台同步轮询(拉取服务器变更)");
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "初始化后台同步失败: " + e.getMessage(), e);
+                syncManager = null;
+            }
         } catch (Exception e) {
             Log.e(TAG, "初始化管理器失败: " + e.getMessage(), e);
         }
@@ -195,6 +211,13 @@ public class StockAlertService extends Service {
         if (checkExecutor != null) {
             checkExecutor.shutdownNow();
             checkExecutor = null;
+        }
+        // 问题3：停止后台同步轮询，避免资源泄漏
+        if (syncManager != null) {
+            try {
+                syncManager.stopPeriodicSync();
+            } catch (Exception ignore) {}
+            syncManager = null;
         }
         releaseWakeLock();
         DeviceReporter.reportAsync(this);
