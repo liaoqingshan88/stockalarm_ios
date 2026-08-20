@@ -18,7 +18,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * 职责：
  *  1. 登录后全量同步：本地无数据 -> 从服务器下载全量；本地有数据 -> 上传合并后再下载覆盖
  *  2. 本地股票增/改/删后自动上传
- *  3. 每 30 秒定时从服务器拉取合并（另一端修改会自动下载）
+ *  3. 每 10 秒定时从服务器拉取合并（另一端修改会自动下载）
  *  4. 冲突解决：以服务端（已按 last_modified 合并）返回的完整列表为准，写回本地
  *
  * last_modified 持久化：由于本地 stock_info 表没有该字段，为每个 code 单独存
@@ -39,8 +39,8 @@ public class SyncManager {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final AtomicBoolean syncing = new AtomicBoolean(false);
 
-    // 30 秒轮询间隔
-    private static final long POLL_INTERVAL_MS = 30_000L;
+    // 10 秒轮询间隔（从 30 秒调小，提升跨端同步时效；首次触发与循环共用此常量）
+    private static final long POLL_INTERVAL_MS = 10_000L;
 
     // 轮询任务是否已启动
     private boolean pollingStarted = false;
@@ -57,6 +57,7 @@ public class SyncManager {
                             pullAndMerge();
                         } catch (Exception e) {
                             Log.w(TAG, "轮询同步异常: " + e.getMessage());
+                            notifyPullFailure();
                         }
                     }
                 }).start();
@@ -293,7 +294,7 @@ public class SyncManager {
     // ==================== 定时拉取合并 ====================
 
     /**
-     * 启动 30 秒轮询。重复调用安全。
+     * 启动 10 秒轮询。重复调用安全。
      */
     public void startPeriodicSync() {
         if (pollingStarted) return;
@@ -324,12 +325,29 @@ public class SyncManager {
             handleClearStockIfNeeded(result.clearStock);
             applyServerStocks(result.stocks, true);
             return true;
+        } catch (SyncClient.SyncUnauthorizedException e) {
+            // 登录态失效：SyncClient 已清除登录态并触发重新登录引导，无需额外处理
+            Log.w(TAG, "拉取失败(401,已触发重新登录): " + e.getMessage());
+            notifyPullFailure();
+            return false;
         } catch (Exception e) {
             Log.w(TAG, "拉取失败: " + e.getMessage());
+            notifyPullFailure();
             return false;
         } finally {
             syncing.set(false);
         }
+    }
+
+    // 轮询失败给 UI 的节流提示：最多每 60 秒提示一次，避免 10 秒轮询下刷屏
+    private volatile long lastPullFailureHint = 0L;
+    private static final long PULL_FAILURE_HINT_INTERVAL_MS = 60_000L;
+
+    private void notifyPullFailure() {
+        long now = System.currentTimeMillis();
+        if (now - lastPullFailureHint < PULL_FAILURE_HINT_INTERVAL_MS) return;
+        lastPullFailureHint = now;
+        postMsg("同步失败：无法从服务器拉取最新数据，请检查网络或重新登录");
     }
 
     // ==================== 本地数据收集 ====================
