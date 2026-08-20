@@ -11,6 +11,8 @@ import static alarm.stock.Constants.*;
  * 均线报警日志管理类。
  * 记录每次均线报警的触发，用于当天去重。
  */
+import static alarm.stock.Constants.*;
+
 public class MaAlarmLogMng {
 
     private StockSQLite m_sqlite;
@@ -53,17 +55,19 @@ public class MaAlarmLogMng {
      * 记录一次均线报警。
      *
      * @param code    股票代码
+     * @param name    股票名称
      * @param period  均线周期
      * @param type    报警类型：1 = 上穿, 2 = 下穿
      * @param maPrice 均线价格
      * @param nowPrice 当前股价
      * @param dateStr 日期字符串（yyyyMMdd）
      */
-    public void recordAlarm(String code, int period, int type, float maPrice, float nowPrice, String dateStr) {
+    public void recordAlarm(String code, String name, int period, int type, float maPrice, float nowPrice, String dateStr) {
         SQLiteDatabase db = m_sqlite.getWritableDatabase();
         try {
             ContentValues values = new ContentValues();
             values.put(MA_ALARM_F_CODE, code);
+            values.put("name", name != null ? name : "");
             values.put(MA_ALARM_F_PERIOD, period);
             values.put(MA_ALARM_F_TYPE, type);
             values.put(MA_ALARM_F_MA_PRICE, maPrice);

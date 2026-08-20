@@ -10,7 +10,6 @@ import android.widget.ListView;
 import android.widget.TextView;
 import static alarm.stock.Constants.*;
 
-// 预警信息类，包含消息和触发预警的股票索引
 class AlarmInfo {
 	String message;
 	int stockIndex;
@@ -23,39 +22,46 @@ class AlarmInfo {
 	}
 }
 
-// 冲高回落/探底回升追踪：记录每支股票在当天观测到的最高/最低价
 class PeakValleyTracker {
-    // key: 日期+股票代码, value: 当日观测最高价/最低价
-    private static final Map<String, float[]> dailyObserved = new HashMap<String, float[]>();
-    // 去重：已经报过冲高回落的，当天不再重复报
-    private static final Map<String, Boolean> alertedPeak = new HashMap<String, Boolean>();
-    private static final Map<String, Boolean> alertedValley = new HashMap<String, Boolean>();
+    // ---- 上冲前高失败回落 / 下探前低失败反弹 状态追踪 ----
+    // 上涨>3% → 下跌(跌幅≥涨幅一半) → 再次上涨接近前高(≥前高*0.995) → 未突破就掉头回落 → 报警
+    // 下跌>3% → 反弹(涨幅≥跌幅一半) → 再次下跌接近前低(≤前低*1.005) → 未跌破就掉头反弹 → 报警
+    // 每只股票每天只报一次
+    //
+    // State array slots:
+    // int[0]: phase
+    // int[1]: rise_start_price * SCALE (上涨/下跌起点)
+    // int[2]: wave_high * SCALE (上涨段最高价)
+    // int[3]: valley_price * SCALE (回调低点)
+    // int[4]: wave_low * SCALE (下跌段最低价)
+    // int[5]: peak_price * SCALE (反弹高点)
+    // int[6]: touched_high_flag (1=已触及前高附近, 0=未触及)
+    // int[7]: touched_low_flag (1=已触及前低附近, 0=未触及)
+    // int[8]: high_alert_count (高侧报警次数)
+    // int[9]: low_alert_count (低侧报警次数)
+    // int[10]: near_high_confirm_start_ms (高侧进入前高附近区间的起始时间戳)
+    // int[11]: near_low_confirm_start_ms (低侧进入前低附近区间的起始时间戳)
+    private static final Map<String, int[]> approachStates = new HashMap<String, int[]>();
+    private static final float RISE_THRESHOLD = 0.03f;       // 上涨≥3%
+    private static final float RETRACE_RATIO = 0.382f;       // 浅回调：回调/反弹≥涨幅38.2%（黄金分割浅回调位）
+    private static final float NEAR_HIGH = 0.995f;           // 接近前高(当前价 >= 前高*0.995)
+    private static final float NEAR_LOW = 1.005f;            // 接近前低(当前价 <= 前低*1.005)
+    private static final long CONFIRM_MS = 3L * 60L * 1000L; // 突破前高/前低确认时间：3分钟
+    private static final int CONFIRM_SAMPLES = 36;           // 每5秒一查，3分钟≈36个采样点（用采样计数确认，避免时间戳溢出）
+    private static final int MAX_ALERTS = 1;                 // 只报一次
+    private static final int SCALE = 10000;                  // 小数转整数倍数
     
-    // 回落/反弹触发阈值（元），可根据股价动态调整
-    private static final float MIN_RETRACE_AMOUNT = 0.01f;  // 1分钱
+    private static ShlAlarmLogMng shlLogMng = null;
+    
+    public static void setShlLogMng(ShlAlarmLogMng mng) {
+        shlLogMng = mng;
+    }
     
     public static void resetForNewDay() {
         String today = getDateStr();
-        // 清理前一天的数据，保留当天的
-        java.util.Iterator<String> it = dailyObserved.keySet().iterator();
-        while (it.hasNext()) {
-            if (!it.next().startsWith(today)) {
-                it.remove();
-            }
-        }
-        // 这里有个问题：上面的迭代器 remove 会让值也一起被删（因为 keySet() backed by map）
-        // 重置 dailyObserved 后再清标记
-        java.util.Iterator<String> pit = alertedPeak.keySet().iterator();
-        while (pit.hasNext()) {
-            if (!pit.next().startsWith(today)) {
-                pit.remove();
-            }
-        }
-        java.util.Iterator<String> vit = alertedValley.keySet().iterator();
-        while (vit.hasNext()) {
-            if (!vit.next().startsWith(today)) {
-                vit.remove();
-            }
+        java.util.Iterator<String> sit = approachStates.keySet().iterator();
+        while (sit.hasNext()) {
+            if (!sit.next().startsWith(today)) { sit.remove(); }
         }
     }
     
@@ -66,98 +72,226 @@ class PeakValleyTracker {
     private static String makeKey(String code) {
         return getDateStr() + ":" + code;
     }
-    
-    /**
-     * 检查冲高回落。
-     * @param code 股票代码
-     * @param nowPrice 当前价
-     * @return 预警消息，无触发返回 null
-     */
-    public static String checkPeakFallback(String code, float nowPrice) {
+
+    public static String checkApproachFailure(String code, String name, float nowPrice) {
         String key = makeKey(code);
-        String alertKey = "peak:" + key;
-        float[] obs = dailyObserved.get(key);
-        
-        if (obs == null) {
-            // 第一次观测，记录当前价作为基准
-            obs = new float[]{nowPrice, nowPrice};
-            dailyObserved.put(key, obs);
-            return null;
+        int[] s = approachStates.get(key);
+        if (s == null) {
+            s = new int[12];
+            approachStates.put(key, s);
         }
         
-        float observedHigh = obs[0];
-        float observedLow = obs[1];
+        int phase = s[0];
+        String result = null;
         
-        // 创新高：更新观测最高价，下次再比较
-        if (nowPrice > observedHigh) {
-            obs[0] = nowPrice;
-            // 创新高后重置冲高回落预警标记，允许后续回落时再报
-            alertedPeak.remove(alertKey);
-            return null;
+        float riseStartPrice = s[1] / (float) SCALE;
+        float waveHigh = s[2] / (float) SCALE;
+        float valleyPrice = s[3] / (float) SCALE;
+        float waveLow = s[4] / (float) SCALE;
+        float peakPrice = s[5] / (float) SCALE;
+        
+        switch (phase) {
+            case 0: // idle
+                if (s[1] == 0) {
+                    s[1] = (int)(nowPrice * SCALE);
+                } else {
+                    if (nowPrice > riseStartPrice * (1 + RISE_THRESHOLD)) {
+                        s[2] = (int)(nowPrice * SCALE);
+                        s[0] = 1;
+                        Log.d("Approach", code + " 上涨3%至" + nowPrice + ", 进入up_wave");
+                    } else if (nowPrice < riseStartPrice * (1 - RISE_THRESHOLD)) {
+                        s[4] = (int)(nowPrice * SCALE);
+                        s[0] = 10;
+                        Log.d("Approach", code + " 下跌3%至" + nowPrice + ", 进入down_wave");
+                    }
+                }
+                break;
+                
+            case 1: // up_wave
+                waveHigh = s[2] / (float) SCALE;
+                riseStartPrice = s[1] / (float) SCALE;
+                if (nowPrice > waveHigh) {
+                    s[2] = (int)(nowPrice * SCALE);
+                } else {
+                    float riseAmount = waveHigh - riseStartPrice;
+                    float dropAmount = waveHigh - nowPrice;
+                    if (riseAmount > 0.0001f && dropAmount >= riseAmount * RETRACE_RATIO) {
+                        s[3] = (int)(nowPrice * SCALE);
+                        s[0] = 2;
+                        Log.d("Approach", code + " 浅回调(38.2%)至" + nowPrice + ", 进入pullback");
+                    }
+                }
+                break;
+                
+            case 2: // pullback
+                valleyPrice = s[3] / (float) SCALE;
+                waveHigh = s[2] / (float) SCALE;
+                if (nowPrice < valleyPrice) {
+                    s[3] = (int)(nowPrice * SCALE);
+                } else if (nowPrice > valleyPrice * 1.003f) {
+                    if (nowPrice >= waveHigh * NEAR_HIGH) {
+                        s[6] = 1;
+                        s[0] = 3;
+                        Log.d("Approach", code + " 触及前高" + waveHigh + " 现价" + nowPrice);
+                    }
+                }
+                break;
+                
+            case 3: // re_approach_high: 接近前高，等待突破或超时确认失败
+                waveHigh = s[2] / (float) SCALE;
+                if (nowPrice > waveHigh * 1.002f) {
+                    // 真突破前高，重置为新上涨波段
+                    s[0] = 1;
+                    s[1] = s[2];
+                    s[2] = (int)(nowPrice * SCALE);
+                    s[3] = 0;
+                    s[6] = 0;
+                    s[10] = 0;
+                    Log.d("Approach", code + " 突破前高" + waveHigh + "至" + nowPrice + ", 重置");
+                    break;
+                }
+                if (nowPrice >= waveHigh * NEAR_HIGH) {
+                    // 仍在"接近前高但未突破"区间：累积采样数
+                    s[10] = s[10] + 1;
+                    if (s[6] == 1 && s[10] >= CONFIRM_SAMPLES) {
+                        // 连续3分钟未能突破前高 → 确认上冲失败
+                        int alertCount = s[8];
+                        if (alertCount < MAX_ALERTS) {
+                            alertCount++;
+                            s[8] = alertCount;
+                            if (shlLogMng != null) {
+                                shlLogMng.recordAlarm(code, name, "high", nowPrice, 0, waveHigh, nowPrice, alertCount, MAX_ALERTS, getDateStr());
+                            }
+                            result = String.format("上冲前高未破(高%.2f现%.2f)", waveHigh, nowPrice);
+                            Log.d("Approach", code + " 上冲前高未破(3分钟)! 高" + waveHigh + " 现" + nowPrice);
+                        }
+                        s[0] = 0;
+                        s[1] = (int)(nowPrice * SCALE);
+                        s[2] = 0;
+                        s[3] = 0;
+                        s[6] = 0;
+                        s[10] = 0;
+                    }
+                    break;
+                }
+                // 已跌出接近区（掉头回落）：若曾接近过前高，提前确认失败
+                if (s[6] == 1 || s[10] > 0) {
+                    int alertCount = s[8];
+                    if (alertCount < MAX_ALERTS) {
+                        alertCount++;
+                        s[8] = alertCount;
+                        if (shlLogMng != null) {
+                            shlLogMng.recordAlarm(code, name, "high", nowPrice, 0, waveHigh, nowPrice, alertCount, MAX_ALERTS, getDateStr());
+                        }
+                        result = String.format("上冲前高失败(高%.2f现%.2f)", waveHigh, nowPrice);
+                        Log.d("Approach", code + " 上冲前高失败(掉头回落)! 高" + waveHigh + " 现" + nowPrice);
+                    }
+                    s[0] = 0;
+                    s[1] = (int)(nowPrice * SCALE);
+                    s[2] = 0;
+                    s[3] = 0;
+                    s[6] = 0;
+                    s[10] = 0;
+                }
+                break;
+                
+            // ====== 下跌方向 ======
+            case 10: // down_wave
+                waveLow = s[4] / (float) SCALE;
+                riseStartPrice = s[1] / (float) SCALE;
+                if (nowPrice < waveLow) {
+                    s[4] = (int)(nowPrice * SCALE);
+                } else {
+                    float dropAmount = riseStartPrice - waveLow;
+                    float riseAmount = nowPrice - waveLow;
+                    if (dropAmount > 0.0001f && riseAmount >= dropAmount * RETRACE_RATIO) {
+                        s[5] = (int)(nowPrice * SCALE);
+                        s[0] = 20;
+                        Log.d("Approach", code + " 浅反弹(38.2%)至" + nowPrice + ", 进入rebound");
+                    }
+                }
+                break;
+                
+            case 20: // rebound
+                peakPrice = s[5] / (float) SCALE;
+                waveLow = s[4] / (float) SCALE;
+                if (nowPrice > peakPrice) {
+                    s[5] = (int)(nowPrice * SCALE);
+                } else if (nowPrice < peakPrice * 0.997f) {
+                    if (nowPrice <= waveLow * NEAR_LOW) {
+                        s[7] = 1;
+                        s[0] = 30;
+                        Log.d("Approach", code + " 触及前低" + waveLow + " 现价" + nowPrice);
+                    }
+                }
+                break;
+                
+            case 30: // re_approach_low: 接近前低，等待跌破或超时确认失败
+                waveLow = s[4] / (float) SCALE;
+                if (nowPrice < waveLow * 0.998f) {
+                    // 真跌破前低，重置为新下跌波段
+                    s[0] = 10;
+                    s[1] = s[4];
+                    s[4] = (int)(nowPrice * SCALE);
+                    s[5] = 0;
+                    s[7] = 0;
+                    s[11] = 0;
+                    Log.d("Approach", code + " 跌破前低" + waveLow + "至" + nowPrice + ", 重置");
+                    break;
+                }
+                if (nowPrice <= waveLow * NEAR_LOW) {
+                    // 仍在"接近前低但未跌破"区间：累积采样数
+                    s[11] = s[11] + 1;
+                    if (s[7] == 1 && s[11] >= CONFIRM_SAMPLES) {
+                        // 连续3分钟未能跌破前低 → 确认下探失败
+                        int alertCount = s[9];
+                        if (alertCount < MAX_ALERTS) {
+                            alertCount++;
+                            s[9] = alertCount;
+                            if (shlLogMng != null) {
+                                shlLogMng.recordAlarm(code, name, "low", nowPrice, 0, waveLow, nowPrice, alertCount, MAX_ALERTS, getDateStr());
+                            }
+                            result = String.format("下探前低未破(低%.2f现%.2f)", waveLow, nowPrice);
+                            Log.d("Approach", code + " 下探前低未破(3分钟)! 低" + waveLow + " 现" + nowPrice);
+                        }
+                        s[0] = 0;
+                        s[1] = (int)(nowPrice * SCALE);
+                        s[4] = 0;
+                        s[5] = 0;
+                        s[7] = 0;
+                        s[11] = 0;
+                    }
+                    break;
+                }
+                // 已反弹离开接近区（掉头反弹）：若曾接近过前低，提前确认失败
+                if (s[7] == 1 || s[11] > 0) {
+                    int alertCount = s[9];
+                    if (alertCount < MAX_ALERTS) {
+                        alertCount++;
+                        s[9] = alertCount;
+                        if (shlLogMng != null) {
+                            shlLogMng.recordAlarm(code, name, "low", nowPrice, 0, waveLow, nowPrice, alertCount, MAX_ALERTS, getDateStr());
+                        }
+                        result = String.format("下探前低失败(低%.2f现%.2f)", waveLow, nowPrice);
+                        Log.d("Approach", code + " 下探前低失败(掉头反弹)! 低" + waveLow + " 现" + nowPrice);
+                    }
+                    s[0] = 0;
+                    s[1] = (int)(nowPrice * SCALE);
+                    s[4] = 0;
+                    s[5] = 0;
+                    s[7] = 0;
+                    s[11] = 0;
+                }
+                break;
         }
-        
-        // 创新低：更新观测最低价
-        if (nowPrice < observedLow) {
-            obs[1] = nowPrice;
-            alertedValley.remove("valley:" + key);
-            return null;
-        }
-        
-        // --- 冲高回落检测 ---
-        // 条件：曾经有过高点(observedHigh)，当前价从高点回落了至少 MIN_RETRACE_AMOUNT，
-        // 且当前价没有突破高点，且当天还没报过
-        if (!alertedPeak.containsKey(alertKey) && nowPrice < observedHigh - MIN_RETRACE_AMOUNT) {
-            float dropPercent = ((observedHigh - nowPrice) / observedHigh) * 100;
-            // 回落幅度至少0.05%才报，避免微小波动误报
-            if (dropPercent >= 0.05f) {
-                alertedPeak.put(alertKey, true);
-                return String.format("冲高回落 %.1f%%(高%.2f现%.2f)", dropPercent, observedHigh, nowPrice);
-            }
-        }
-        
-        return null;
+        return result;
     }
     
-    /**
-     * 检查探底回升。
-     * @param code 股票代码
-     * @param nowPrice 当前价
-     * @return 预警消息，无触发返回 null
-     */
-    public static String checkValleyBounce(String code, float nowPrice) {
-        String key = makeKey(code);
-        String alertKey = "valley:" + key;
-        float[] obs = dailyObserved.get(key);
-        
-        if (obs == null) {
-            return null;
-        }
-        
-        float observedHigh = obs[0];
-        float observedLow = obs[1];
-        
-        // 已经创新高/低的情况在 checkPeakFallback 里处理了
-        // 这里只需检测从低点反弹
-        if (!alertedValley.containsKey(alertKey) && nowPrice > observedLow + MIN_RETRACE_AMOUNT) {
-            float risePercent = ((nowPrice - observedLow) / observedLow) * 100;
-            if (risePercent >= 0.05f) {
-                alertedValley.put(alertKey, true);
-                return String.format("探底回升 %.1f%%(低%.2f现%.2f)", risePercent, observedLow, nowPrice);
-            }
-        }
-        
-        return null;
-    }
+    // 保留原有的冲高回落/探底回升
 }
 
 
-/*
- 1. AsyncTask的三个泛型参数说明（三个参数可以是任何类型） 
- 2.    第一个参数：传入doInBackground()方法的参数类型 
- 3.    第二个参数：传入onProgressUpdate()方法的参数类型 
- 4.    第三个参数：传入onPostExecute()方法的参数类型，也是doInBackground()方法返回的类型。
 
- */
 class Compare extends AsyncTask<StockMng, TextView, List<SinaStockInfo>>{
    
     TextView te=null;
@@ -168,57 +302,53 @@ class Compare extends AsyncTask<StockMng, TextView, List<SinaStockInfo>>{
     MaPriceMng maMng = null;
     MaAlarmLogMng maAlarmLogMng = null;
     
-    public Compare(AlarmActivity act,TextView te, ListView listview, MaPriceMng maMng, MaAlarmLogMng maAlarmLogMng) {
+    public Compare(AlarmActivity act, TextView te, ListView listview, MaPriceMng maMng, MaAlarmLogMng maAlarmLogMng) {
         super();
         this.te = te;
         this.listview = listview;
         this.act = act;
         this.maMng = maMng;
         this.maAlarmLogMng = maAlarmLogMng;
+        try {
+            if (act != null) {
+                PeakValleyTracker.setShlLogMng(new ShlAlarmLogMng(new StockSQLite(act)));
+            }
+        } catch (Exception e) {
+            Log.e("Compare", "Failed to init SHL log mgr", e);
+        }
     }
 
    @Override
     protected List<SinaStockInfo> doInBackground(StockMng... params)  {
 	   try {
-		   System.out.println("do enter");
 		   this.stockMng = params[0];
-		   if(null == this.stockMng )
-		   {
-		   		Log.e("cmp", "compare para err\n");
+		   if(null == this.stockMng ) {
+		   		Log.e("cmp", "compare para err");
 		   		return null;
 		   }
 		   this.codes = stockMng.GetCodes();
-		   SinaStockClient mClient;
-		   mClient = SinaStockClient.getInstance();
-		   List<SinaStockInfo>  stockinfo  = mClient.getStockInfo(codes );
-		   System.out.println("do return ok");
+		   SinaStockClient mClient = SinaStockClient.getInstance();
+		   List<SinaStockInfo> stockinfo = mClient.getStockInfo(codes);
 		   return stockinfo;
+	   } catch (Exception e) {
+		   return null;
 	   }
-		catch (Exception e) {
-			 System.out.println("do return failed");
-			return null;
-		}
     }
    
-   //finished
    @Override
     protected void onPostExecute(List<SinaStockInfo> result){
 		try{
 		    super.onPostExecute(result);
-	        if( null == result )
-	        {
+	        if (null == result) {
 	        	AlarmActivity.is_http_timeout = true;
 	        	return;
 	        }
-	        
 	        AlarmActivity.is_http_timeout = false;
 	        act.ReflashStockPrice(listview, result);
 	        AlarmInfo alarmInfo = compareAllStocks(stockMng, result, maMng, maAlarmLogMng);
-			if( alarmInfo != null && alarmInfo.message.length() > 0 )
-			{
+			if (alarmInfo != null && alarmInfo.message.length() > 0) {
 				te.append("\n"+alarmInfo.message);
 				act.Notification(alarmInfo.message);
-				// 定位到触发预警的股票并高亮显示
 				act.scrollToAlarmStock(listview, alarmInfo.stockIndex, alarmInfo.stockCode);
 			}
      	}catch (Exception e) {
@@ -235,143 +365,104 @@ class Compare extends AsyncTask<StockMng, TextView, List<SinaStockInfo>>{
     protected void onProgressUpdate(TextView... values) {
     }
    
-
-	/**
-	 * 均线名称数组，与 MaPriceMng.MA_PERIODS 对应。
-	 */
 	private static final String[] MA_NAMES = {"MA5", "MA10", "MA20", "MA30", "MA60", "MA120", "MA250"};
 
-	public static AlarmInfo compareAllStocks(StockMng stockMng, List<SinaStockInfo>  stockinfo, MaPriceMng maMng, MaAlarmLogMng maAlarmLogMng ) {
-		try{
-				
-			List<StockMng> listStocks = stockMng.getStocks();
-			int i=0,j =0;
+	/**
+	 * 后台保活预警检查（供 StockAlertService 调用，不依赖 Activity）。
+	 * 在后台线程拉取行情，命中预警时通过系统通知发出。
+	 * @return 命中的预警消息，无则返回 null
+	 */
+	public static AlarmInfo checkAndNotify(android.content.Context ctx, StockMng stockMng, MaPriceMng maMng, MaAlarmLogMng maAlarmLogMng) {
+		try {
+			if (stockMng == null) return null;
+			String[] codes = stockMng.GetCodes();
+			if (codes == null || codes.length == 0) return null;
 
-			// 每天首次检测时重置冲高回落追踪（防止跨日数据残留）
-			{
-				String todayStr = new java.text.SimpleDateFormat("yyyyMMdd").format(new java.util.Date());
-				PeakValleyTracker.resetForNewDay();
+			SinaStockClient client = SinaStockClient.getInstance();
+			List<SinaStockInfo> result = client.getStockInfo(codes);
+			if (result == null || result.isEmpty()) return null;
+
+			AlarmInfo alarmInfo = compareAllStocks(stockMng, result, maMng, maAlarmLogMng);
+			if (alarmInfo != null && alarmInfo.message != null && alarmInfo.message.length() > 0) {
+				AlarmNotifier.notifyAlarm(ctx, alarmInfo.message);
+				return alarmInfo;
 			}
+		} catch (Exception e) {
+			Log.e("Compare", "checkAndNotify error: " + e.getMessage(), e);
+		}
+		return null;
+	}
 
-			for( i = 0; i< listStocks.size(); i++) {
+	public static AlarmInfo compareAllStocks(StockMng stockMng, List<SinaStockInfo> stockinfo, MaPriceMng maMng, MaAlarmLogMng maAlarmLogMng ) {
+		try{
+			List<StockMng> listStocks = stockMng.getStocks();
+			int i=0, j =0;
+			PeakValleyTracker.resetForNewDay();
+
+			for (i = 0; i < listStocks.size(); i++) {
 				StockMng stock = listStocks.get(i);
-				if( !stock.IsValid())
-				{
-					continue;
-				}
-				if( j>= stockinfo.size() )
-				{
-					break;
-				}
+				if (!stock.IsValid()) continue;
+				if (j >= stockinfo.size()) break;
 				SinaStockInfo stock1 = stockinfo.get(j++);
 				int ret = stock.Compare(stock1.getNowPrice(), stock1.getYestodayPrice());
-
-				if( CMP_RESULT_NONE != ret ) {
+				if (CMP_RESULT_NONE != ret) {
 					return new AlarmInfo(stock1.getName()+"-"+stock.GetCmpareResult(), i, stock.GetCode());
 				}
 
-				// 均线预警检查
 				if (maMng != null) {
-					String maAlarm = checkMaAlarm(stock.GetCode(), stock1.getNowPrice(), stock1.getYestodayPrice(), maMng, maAlarmLogMng);
+					String maAlarm = checkMaAlarm(stock.GetCode(), stock1.getName(), stock1.getNowPrice(), stock1.getYestodayPrice(), maMng, maAlarmLogMng);
 					if (maAlarm != null) {
 						return new AlarmInfo(stock1.getName() + "-" + maAlarm, i, stock.GetCode());
 					}
 				}
 
-				// 冲高回落 / 探底回升检测
-				String peakAlarm = PeakValleyTracker.checkPeakFallback(stock.GetCode(), stock1.getNowPrice());
-				if (peakAlarm != null) {
-					return new AlarmInfo(stock1.getName() + "-" + peakAlarm, i, stock.GetCode());
-				}
-				String valleyAlarm = PeakValleyTracker.checkValleyBounce(stock.GetCode(), stock1.getNowPrice());
-				if (valleyAlarm != null) {
-					return new AlarmInfo(stock1.getName() + "-" + valleyAlarm, i, stock.GetCode());
+				// 上冲前高失败回落 / 下探前低失败反弹 检测
+				String approachAlarm = PeakValleyTracker.checkApproachFailure(stock.GetCode(), stock1.getName(), stock1.getNowPrice());
+				if (approachAlarm != null) {
+					return new AlarmInfo(stock1.getName() + "-" + approachAlarm, i, stock.GetCode());
 				}
 			}
-
 			return null;
-		}
-		catch (Exception e)
-		{
+		} catch (Exception e) {
 			Log.e("compareAllStocks", "error: " + e.getMessage(), e);
 			return null;
 		}
 	}
 
-	/**
-	 * 检查某支股票的均线价格预警。
-	 * 当股价突破（上穿或下穿）某条均线时触发预警。
-	 *
-	 * @param code 股票代码
-	 * @param nowPrice 当前价
-	 * @param yestodayPrice 昨收价
-	 * @param maMng MaPriceMng 实例
-	 * @return 预警消息，无触发则返回 null
-	 */
-	private static String checkMaAlarm(String code, float nowPrice, float yestodayPrice, MaPriceMng maMng, MaAlarmLogMng maAlarmLogMng) {
+	private static String checkMaAlarm(String code, String name, float nowPrice, float yestodayPrice, MaPriceMng maMng, MaAlarmLogMng maAlarmLogMng) {
 		if (maMng == null) return null;
 		try {
 			float[] maPrices = maMng.getMaPrices(code);
 			if (maPrices == null) return null;
-
-			// 价格不能为0
 			if (nowPrice < 0.00001f) return null;
-
-			// 当天日期字符串 yyyyMMdd
 			java.text.SimpleDateFormat dateFormat = new java.text.SimpleDateFormat("yyyyMMdd");
 			String todayStr = dateFormat.format(new java.util.Date());
-
 			StringBuilder alarmMsg = new StringBuilder();
-
 			for (int i = 0; i < MaPriceMng.MA_PERIODS.length; i++) {
 				float ma = maPrices[i];
-				if (ma < 0) continue; // 无数据
-
+				if (ma < 0) continue;
 				int period = MaPriceMng.MA_PERIODS[i];
 				String maName = MA_NAMES[i];
-
-				// 上穿 MA：昨收低于 MA，现价达到或超过 MA
 				boolean crossUp = (yestodayPrice < ma && nowPrice >= ma);
-
-				// 下穿 MA：昨收高于 MA，现价达到或低于 MA
 				boolean crossDown = (yestodayPrice > ma && nowPrice <= ma);
-
 				if (crossUp) {
-					// 去重：当天是否已报过该股票的该均线上穿
-					if (maAlarmLogMng != null && maAlarmLogMng.isAlreadyAlarmedToday(code, period, 1, todayStr)) {
-						continue;
-					}
+					if (maAlarmLogMng != null && maAlarmLogMng.isAlreadyAlarmedToday(code, period, 1, todayStr)) continue;
 					float diff = ((nowPrice - ma) / ma) * 100;
 					if (alarmMsg.length() > 0) alarmMsg.append("; ");
 					alarmMsg.append("上穿" + maName + "(" + String.format("%.2f,%.1f%%", ma, diff) + ")");
-					// 记录报警日志
-					if (maAlarmLogMng != null) {
-						maAlarmLogMng.recordAlarm(code, period, 1, ma, nowPrice, todayStr);
-					}
+					if (maAlarmLogMng != null) maAlarmLogMng.recordAlarm(code, name, period, 1, ma, nowPrice, todayStr);
 				} else if (crossDown) {
-					// 去重：当天是否已报过该股票的该均线下穿
-					if (maAlarmLogMng != null && maAlarmLogMng.isAlreadyAlarmedToday(code, period, 2, todayStr)) {
-						continue;
-					}
+					if (maAlarmLogMng != null && maAlarmLogMng.isAlreadyAlarmedToday(code, period, 2, todayStr)) continue;
 					float diff = ((ma - nowPrice) / ma) * 100;
 					if (alarmMsg.length() > 0) alarmMsg.append("; ");
 					alarmMsg.append("下穿" + maName + "(" + String.format("%.2f,%.1f%%", ma, diff) + ")");
-					// 记录报警日志
-					if (maAlarmLogMng != null) {
-						maAlarmLogMng.recordAlarm(code, period, 2, ma, nowPrice, todayStr);
-					}
+					if (maAlarmLogMng != null) maAlarmLogMng.recordAlarm(code, name, period, 2, ma, nowPrice, todayStr);
 				}
 			}
-
-			if (alarmMsg.length() > 0) {
-				return alarmMsg.toString();
-			}
+			if (alarmMsg.length() > 0) return alarmMsg.toString();
 		} catch (Exception e) {
 			Log.e("compareAllStocks", "MA alarm check failed: " + e.getMessage(), e);
 		}
 		return null;
 	}
-
-
 }
-

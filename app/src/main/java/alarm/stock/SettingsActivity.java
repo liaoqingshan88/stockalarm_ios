@@ -65,6 +65,17 @@ public class SettingsActivity extends Activity {
 		textSubmitStatus = (TextView) findViewById(R.id.text_submit_status);
 		textSubmitStatus.setMovementMethod(new android.text.method.ScrollingMovementMethod());
 		Button btnBack = (Button) findViewById(R.id.btn_back);
+		// 多端同步账号入口
+		Button btnSyncAccount = (Button) findViewById(R.id.btn_sync_account);
+		if (btnSyncAccount != null) {
+			btnSyncAccount.setOnClickListener(new View.OnClickListener() {
+				@Override
+				public void onClick(View v) {
+					Intent intent = new Intent(SettingsActivity.this, SyncLoginActivity.class);
+					startActivity(intent);
+				}
+			});
+		}
 		
 		// 加载保存的设置
 		loadSettings();

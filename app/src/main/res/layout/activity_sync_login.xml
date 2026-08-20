@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFFFF">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp"
+        android:background="#FFFFFF">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="【多端同步账号】"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:textColor="#000000"
+            android:gravity="center"
+            android:layout_marginBottom="4dp" />
+
+        <!-- 当前账号状态 -->
+        <TextView
+            android:id="@+id/sync_text_account"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="未登录"
+            android:textSize="13sp"
+            android:textColor="#333333"
+            android:gravity="center"
+            android:padding="8dp"
+            android:layout_marginBottom="8dp"
+            android:background="#E8F5E9" />
+
+        <!-- 手机号 -->
+        <EditText
+            android:id="@+id/sync_edit_phone"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="手机号"
+            android:inputType="phone"
+            android:maxLength="11"
+            android:textSize="16sp"
+            android:textColor="#000000"
+            android:textColorHint="#666666"
+            android:background="#FFFFFF"
+            android:padding="12dp"
+            android:layout_marginBottom="8dp" />
+
+        <!-- 密码 -->
+        <EditText
+            android:id="@+id/sync_edit_password"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="密码"
+            android:inputType="textPassword"
+            android:textSize="16sp"
+            android:textColor="#000000"
+            android:textColorHint="#666666"
+            android:background="#FFFFFF"
+            android:padding="12dp"
+            android:layout_marginBottom="8dp" />
+
+        <!-- 登录 -->
+        <Button
+            android:id="@+id/sync_btn_login"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="登录"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:background="#4CAF50"
+            android:layout_marginBottom="8dp" />
+
+        <!-- 注册 -->
+        <Button
+            android:id="@+id/sync_btn_register"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="注册（初始密码 123456）"
+            android:textSize="16sp"
+            android:textColor="#000000"
+            android:background="#EEEEEE"
+            android:layout_marginBottom="8dp" />
+
+        <!-- 修改密码 -->
+        <TextView
+            android:id="@+id/sync_btn_change_pwd"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="修改密码"
+            android:textSize="15sp"
+            android:textColor="#1976D2"
+            android:gravity="center"
+            android:padding="8dp"
+            android:visibility="gone" />
+
+        <!-- 退出登录 -->
+        <Button
+            android:id="@+id/sync_btn_logout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="退出登录"
+            android:textSize="16sp"
+            android:textColor="#D32F2F"
+            android:background="#FFFFFF"
+            android:visibility="gone"
+            android:layout_marginTop="8dp" />
+
+        <!-- 状态提示 -->
+        <TextView
+            android:id="@+id/sync_text_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textSize="13sp"
+            android:textColor="#333333"
+            android:padding="8dp"
+            android:layout_marginTop="8dp"
+            android:background="#FFF8E1"
+            android:minHeight="40dp" />
+
+        <!-- 说明 -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="说明：\n· 注册后默认密码为 123456\n· 同一手机号登录的多端设备将自动同步股票列表和报警配置\n· 修改后自动上传，另一端约30秒后自动更新"
+            android:textSize="12sp"
+            android:textColor="#666666"
+            android:padding="8dp"
+            android:layout_marginTop="8dp" />
+
+    </LinearLayout>
+</ScrollView>

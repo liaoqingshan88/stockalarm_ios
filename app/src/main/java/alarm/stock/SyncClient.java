@@ -422,7 +422,8 @@ public class SyncClient {
         public float price_l;
         public int rise;
         public int drop;
-        public int valid;      // 1/0
+        public int valid;          // 1/0
+        public boolean deleted;    // 墓碑软删除标记：true 表示该股票已删除（仅保留墓碑同步用）
         public long last_modified; // 毫秒时间戳
 
         public JSONObject toJson() {
@@ -435,6 +436,7 @@ public class SyncClient {
                 o.put("rise", rise);
                 o.put("drop", drop);
                 o.put("valid", valid);
+                o.put("deleted", deleted);
                 o.put("last_modified", last_modified);
             } catch (Exception e) {
                 Log.e(TAG, "SyncStock.toJson error", e);
@@ -452,6 +454,7 @@ public class SyncClient {
             s.rise = o.optInt("rise", 0);
             s.drop = o.optInt("drop", 0);
             s.valid = o.optInt("valid", 1);
+            s.deleted = o.optBoolean("deleted", false);
             s.last_modified = o.optLong("last_modified", 0);
             return s;
         }

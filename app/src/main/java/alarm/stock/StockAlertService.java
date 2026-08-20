@@ -8,19 +8,28 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
+import android.os.PowerManager;
 import android.util.Log;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
+
 /**
  * 前台服务：保持股票预警应用在后台持续运行。
- * 
- * 原理：
+ *
+ * 核心作用：
  * 1. 显示一个常驻通知栏的通知（系统几乎不会杀前台服务）
  * 2. START_STICKY 确保被杀后自动重启
- * 3. Activity 退到后台时服务继续保活
+ * 3. 内置独立的后台预警循环：即使 AlarmActivity 被系统回收，
+ *    本服务也能每 5 秒拉取行情、检测预警条件，命中后直接发系统通知。
+ * 4. 持有 WakeLock，防止轮询期间系统休眠导致预警中断。
  */
 public class StockAlertService extends Service {
 
@@ -28,15 +37,34 @@ public class StockAlertService extends Service {
     private static final int NOTIFICATION_ID = 10001;
     private static final String CHANNEL_ID = "stock_alert_foreground";
 
+    // 后台预警循环
+    private static final long CHECK_INTERVAL_MS = 5000L; // 5 秒一次
+    private final AtomicBoolean checking = new AtomicBoolean(false);
+    private Handler loopHandler;
+    private Runnable loopRunnable;
+    private ExecutorService checkExecutor;
+    private StockMng stockMng;
+    private MaPriceMng maMng;
+    private MaAlarmLogMng maAlarmLogMng;
+    private StockSQLite sqlite;
+    private PowerManager.WakeLock wakeLock;
+
+    private static boolean running = false;
+    public static boolean isRunning() { return running; }
+
     /**
      * 启动前台服务（供外部调用）
      */
     public static void start(Context context) {
         Intent intent = new Intent(context, StockAlertService.class);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(intent);
-        } else {
-            context.startService(intent);
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent);
+            } else {
+                context.startService(intent);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "启动服务失败: " + e.getMessage(), e);
         }
     }
 
@@ -52,21 +80,123 @@ public class StockAlertService extends Service {
     public void onCreate() {
         super.onCreate();
         Log.d(TAG, "服务创建");
+        running = true;
         startForeground(NOTIFICATION_ID, buildNotification("股票预警运行中"));
-        
+        acquireWakeLock();
+        initManagers();
+        startCheckLoop();
+
         // 上报设备信息到服务器
         DeviceReporter.reportAsync(this);
+    }
+
+    private void initManagers() {
+        try {
+            sqlite = new StockSQLite(this);
+            stockMng = new StockMng(sqlite);
+            maMng = new MaPriceMng(sqlite);
+            maAlarmLogMng = new MaAlarmLogMng(sqlite);
+            PeakValleyTracker.setShlLogMng(new ShlAlarmLogMng(sqlite));
+        } catch (Exception e) {
+            Log.e(TAG, "初始化管理器失败: " + e.getMessage(), e);
+        }
+    }
+
+    private void acquireWakeLock() {
+        try {
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            if (pm != null) {
+                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "stock:alert");
+                wakeLock.setReferenceCounted(false);
+                wakeLock.acquire();
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "获取WakeLock失败: " + e.getMessage(), e);
+        }
+    }
+
+    private void releaseWakeLock() {
+        try {
+            if (wakeLock != null && wakeLock.isHeld()) {
+                wakeLock.release();
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "释放WakeLock失败: " + e.getMessage(), e);
+        }
+        wakeLock = null;
+    }
+
+    private void startCheckLoop() {
+        loopHandler = new Handler(Looper.getMainLooper());
+        checkExecutor = Executors.newSingleThreadExecutor();
+        loopRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (!running) return;
+                runSingleCheck();
+                if (loopHandler != null) {
+                    loopHandler.postDelayed(this, CHECK_INTERVAL_MS);
+                }
+            }
+        };
+        loopHandler.postDelayed(loopRunnable, 1000);
+    }
+
+    /** 单次检测：交易时间内检查预警，命中发通知 */
+    private void runSingleCheck() {
+        if (checking.getAndSet(true)) return; // 防止重入
+        try {
+            if (stockMng == null) return;
+            if (!StockTime.IsTradeTime()) return; // 非交易时间跳过
+
+            final StockMng m = stockMng;
+            final MaPriceMng mm = maMng;
+            final MaAlarmLogMng ma = maAlarmLogMng;
+            final Context ctx = getApplicationContext();
+            checkExecutor.execute(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        Compare.checkAndNotify(ctx, m, mm, ma);
+                    } catch (Exception e) {
+                        Log.e(TAG, "后台检查异常: " + e.getMessage(), e);
+                    } finally {
+                        checking.set(false);
+                    }
+                }
+            });
+        } catch (Exception e) {
+            Log.e(TAG, "runSingleCheck异常: " + e.getMessage(), e);
+            checking.set(false);
+        }
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.d(TAG, "服务启动");
+        if (!running) {
+            running = true;
+            startForeground(NOTIFICATION_ID, buildNotification("股票预警运行中"));
+            acquireWakeLock();
+            initManagers();
+            startCheckLoop();
+        }
         // START_STICKY: 被系统杀死后会自动重启
         return START_STICKY;
     }
 
     @Override
     public void onDestroy() {
+        running = false;
+        if (loopHandler != null) {
+            loopHandler.removeCallbacksAndMessages(null);
+            loopHandler = null;
+        }
+        if (checkExecutor != null) {
+            checkExecutor.shutdownNow();
+            checkExecutor = null;
+        }
+        releaseWakeLock();
         DeviceReporter.reportAsync(this);
         super.onDestroy();
         Log.d(TAG, "服务销毁");

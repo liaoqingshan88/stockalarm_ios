@@ -30,6 +30,8 @@ public class SyncManager {
     private static final String PREF_TS_PREFIX = "sync_ts:";
     // 本地已见到的服务器 clear_stock 版本号（用于跨端清空感知）
     private static final String PREF_CLEAR_STOCK = "clear_stock";
+    // 服务器已软删除(delleted:true 墓碑)的 code 集合：用于全量上传时过滤，防止复活已删除股票
+    private final java.util.Set<String> serverDeletedCodes = new java.util.HashSet<>();
 
     private final Context context;
     private final SyncClient client;
@@ -142,6 +144,8 @@ public class SyncManager {
                 // 避免把本地旧数据重新上传回去。
                 Log.i(TAG, "本地有数据，上传合并前检查 clear_stock");
                 SyncClient.SyncStockResult check = client.getStocks();
+                // 刷新服务器已软删除墓碑集合，防止把另一端已删除的股票再传上去复活
+                refreshServerDeleted(check.stocks);
                 if (handleClearStockIfNeeded(check.clearStock)) {
                     // 其它端已清空，本地已同步清空，重新拉取即可（此时服务器也为空）
                     applyServerStocks(check.stocks, false);
@@ -184,6 +188,14 @@ public class SyncManager {
                 }
             };
             StockMng stockMng = new StockMng(sqlite);
+            // 上传前先拉取服务器列表，刷新已软删除墓碑集合，防止把另一端已删除的股票再传上去复活
+            try {
+                SyncClient.SyncStockResult pre = client.getStocks();
+                handleClearStockIfNeeded(pre.clearStock);
+                refreshServerDeleted(pre.stocks);
+            } catch (Exception e) {
+                Log.w(TAG, "上传前拉取墓碑失败: " + e.getMessage());
+            }
             List<SyncClient.SyncStock> toUpload = collectLocalStocks(stockMng);
             List<SyncClient.SyncStock> merged = client.uploadStocks(toUpload);
             pendingRetry = null; // 成功，清除待重试
@@ -233,7 +245,9 @@ public class SyncManager {
             client.deleteStock(code);
             pendingRetry = null; // 成功，清除待重试
             removeLocalTimestamp(code);
-            Log.i(TAG, "已删除云端股票: " + code);
+            // 服务器已软删除，记录墓碑 code，防止后续全量上传把该股票再次上传复活
+            serverDeletedCodes.add(code);
+            Log.i(TAG, "已删除云端股票(软删墓碑): " + code);
         } catch (SyncClient.SyncUnauthorizedException e) {
             // 登录态失效：已由 SyncClient/SyncManager 处理，pendingRetry 已记录本次删除操作
             throw e;
@@ -328,15 +342,22 @@ public class SyncManager {
         List<StockMng> list = stockMng.getStocks();
         if (list == null) return out;
         for (StockMng s : list) {
+            String code = s.GetCode();
+            // 防复活：服务器已标记软删除(deleted:true 墓碑)的本地股票不要重复上传，
+            // 否则会把已删除的股票重新上传到服务器复活。
+            if (serverDeletedCodes.contains(code)) {
+                Log.i(TAG, "跳过上传：服务器已软删除该股票 " + code);
+                continue;
+            }
             SyncClient.SyncStock sync = new SyncClient.SyncStock();
-            sync.code = s.GetCode();
+            sync.code = code;
             sync.name = s.GetName();
             sync.price_h = s.GetHigh();
             sync.price_l = s.GetLow();
             sync.rise = s.GetRise();
             sync.drop = s.GetDrop();
             sync.valid = s.IsValid() ? 1 : 0;
-            sync.last_modified = getLocalTimestamp(s.GetCode(), System.currentTimeMillis());
+            sync.last_modified = getLocalTimestamp(code, System.currentTimeMillis());
             out.add(sync);
         }
         return out;
@@ -353,20 +374,27 @@ public class SyncManager {
         StockMng stockMng = new StockMng(sqlite);
         // 收集服务器上的所有 code，用于清理本地被删除的
         Map<String, SyncClient.SyncStock> serverMap = new HashMap<>();
+        // 记录服务器已软删除(deleted:true 墓碑)的 code，供全量上传过滤防复活
+        serverDeletedCodes.clear();
         for (SyncClient.SyncStock s : server) {
-            serverMap.put(s.code, s);
+            if (s != null && s.deleted) {
+                serverDeletedCodes.add(s.code);
+            } else if (s != null) {
+                serverMap.put(s.code, s);
+            }
         }
 
-        // 1. 本地的，若服务器没有 -> 删除（另一端删除了）
+        // 1. 本地股票，若服务器没有（且非墓碑）或该 code 已被服务器软删除(deleted:true) -> 删除本地并清时间戳
         List<StockMng> local = stockMng.getStocks();
         if (local != null) {
             for (StockMng s : local) {
-                if (!serverMap.containsKey(s.GetCode())) {
+                String code = s.GetCode();
+                if (!serverMap.containsKey(code) || serverDeletedCodes.contains(code)) {
                     try {
-                        stockMng.Delete(s.GetCode());
-                        removeLocalTimestamp(s.GetCode());
+                        stockMng.Delete(code);
+                        removeLocalTimestamp(code);
                     } catch (Exception e) {
-                        Log.w(TAG, "删除本地股票失败: " + s.GetCode(), e);
+                        Log.w(TAG, "删除本地股票失败: " + code, e);
                     }
                 }
             }
@@ -409,6 +437,20 @@ public class SyncManager {
             return true;
         } catch (Exception e) {
             return false;
+        }
+    }
+
+    /**
+     * 根据服务器股票列表刷新“已软删除墓碑”code 集合。
+     * 仅用于填充 serverDeletedCodes，不写本地数据库。
+     */
+    private void refreshServerDeleted(List<SyncClient.SyncStock> server) {
+        if (server == null) return;
+        serverDeletedCodes.clear();
+        for (SyncClient.SyncStock s : server) {
+            if (s != null && s.deleted) {
+                serverDeletedCodes.add(s.code);
+            }
         }
     }
 

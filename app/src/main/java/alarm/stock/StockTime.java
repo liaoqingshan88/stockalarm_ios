@@ -27,7 +27,7 @@ public class StockTime {
 		if( WeekOfYear >= 1&& WeekOfYear<=5 ) {
 			int curSecond = GetSecond(hour, minute, second);
 
-			if(     ( curSecond >= GetSecond(9,30,0) && curSecond <= GetSecond(11,30,0)  )
+			if(     ( curSecond >= GetSecond(9,25,0) && curSecond <= GetSecond(11,30,0)  )
 					||  ( curSecond >= GetSecond(13,00,0) && curSecond <= GetSecond(15,0,0) )
 			  ) {
 				return true;
