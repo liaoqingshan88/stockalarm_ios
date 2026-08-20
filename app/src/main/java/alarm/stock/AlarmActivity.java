@@ -26,6 +26,7 @@ import android.widget.RelativeLayout;
 import android.widget.SimpleAdapter;
 import android.widget.TextView;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.Toast;
 import android.util.Log;
 import android.view.*;
@@ -130,6 +131,12 @@ public class AlarmActivity extends Activity {
 
 	private Login m_login; 
 	private Update m_update;
+
+	// 多端同步管理（登录/自动上传/轮询拉取）
+	private SyncManager m_syncManager;
+	private static final int REQUEST_CODE_SYNC_LOGIN = 2001;
+	// 重新登录对话框是否已在展示（避免 401 并发触发多个对话框）
+	private volatile boolean reloginDialogShowing = false;
 	
 	Handler handler;
 	Runnable runnable;
@@ -163,6 +170,47 @@ public class AlarmActivity extends Activity {
 		eView.setText(StockTime.GetTime() + " " + message);
 		handler.removeCallbacks(clearStatusMessageRunnable);
 		handler.postDelayed(clearStatusMessageRunnable, 5000L);
+	}
+
+	/**
+	 * 引导用户在国产ROM（小米/华为/OPPO/vivo等）中忽略电池优化，
+	 * 避免后台预警服务被系统限制/杀灭。只在首次打开时提示一次。
+	 */
+	private void redirectToIgnoreBatteryOptimizationIfNeeded() {
+		try {
+			if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.M) return;
+			android.os.PowerManager pm = (android.os.PowerManager) getSystemService(android.content.Context.POWER_SERVICE);
+			if (pm == null || pm.isIgnoringBatteryOptimizations(getPackageName())) return;
+			// 只提示一次，避免每次打开都弹
+			if (getSharedPreferences("stock_pref", MODE_PRIVATE).getBoolean("battery_opt_asked", false)) return;
+			getSharedPreferences("stock_pref", MODE_PRIVATE).edit().putBoolean("battery_opt_asked", true).apply();
+
+			final android.app.Activity act = this;
+			new android.app.AlertDialog.Builder(act)
+				.setTitle("保持预警不中断")
+				.setMessage("为避免系统在后台限制或杀掉本应用导致预警中断，建议允许本应用忽略电池优化（仅用于保持后台运行）。")
+				.setPositiveButton("去设置", new DialogInterface.OnClickListener() {
+					@Override
+					public void onClick(DialogInterface d, int w) {
+						try {
+							Intent intent = new Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+									android.net.Uri.parse("package:" + getPackageName()));
+							startActivity(intent);
+						} catch (Exception e) {
+							try {
+								Intent intent = new Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+								startActivity(intent);
+							} catch (Exception e2) {
+								Toast.makeText(act, "请在系统设置中允许本应用后台运行", Toast.LENGTH_LONG).show();
+							}
+						}
+					}
+				})
+				.setNegativeButton("暂不", null)
+				.show();
+		} catch (Exception e) {
+			android.util.Log.e("AlarmActivity", "电池优化引导失败: " + e.getMessage(), e);
+		}
 	}
 	
 	// For image import
@@ -246,8 +294,6 @@ public class AlarmActivity extends Activity {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.main);
 
-		showLastCrashIfAny();
-
 		// 上报设备信息到服务器
 		DeviceReporter.reportAsync(this);
 
@@ -261,11 +307,14 @@ public class AlarmActivity extends Activity {
 		}
 		*/
         enter_time = StockTime.GetCurTime();
-		mySqlite = new StockSQLite(this, DB_NAME, null, DB_VERSION);
+		mySqlite = new StockSQLite(this);
 		m_stockMng = new StockMng(mySqlite);
 		m_maMng = new MaPriceMng(mySqlite);
 		m_maDownloader = new MaDownloader();
 		m_maAlarmLogMng = new MaAlarmLogMng(mySqlite);
+		// 启动前台预警服务：后台保活，Activity 被回收后预警仍继续
+		StockAlertService.start(this);
+		redirectToIgnoreBatteryOptimizationIfNeeded();
 		//ListView list = (ListView) findViewById(R.id.ListView01);
 		createListView(m_stockMng.getStocks());
 
@@ -291,6 +340,56 @@ public class AlarmActivity extends Activity {
 		m_update = new Update(AlarmActivity.this);
 		m_login = new Login(m_update);
 		m_update.SetLoginer(m_login);
+
+		// 初始化多端同步管理器
+		m_syncManager = new SyncManager(this);
+		// 主界面同步状态提示
+		final SyncManager syncMgr = m_syncManager;
+		m_syncManager.setListener(new SyncManager.SyncListener() {
+			@Override
+			public void onSyncMessage(String message) {
+				try {
+					TextView eView = (TextView) findViewById(R.id.edit_stock_info);
+					if (eView != null) {
+						eView.setText(StockTime.GetTime() + " " + message);
+					}
+				} catch (Exception ignore) {}
+			}
+		});
+		// 会话失效（401）监听：登录态与服务端不匹配时自动清除登录态并弹出重新登录引导，
+		// 重新登录成功后自动重试刚才失败的修改/删除操作
+		m_syncManager.setSessionExpiredListener(new SyncManager.SessionExpiredListener() {
+			@Override
+			public void onSessionExpired(final String message) {
+				// 回调可能来自子线程，切回主线程弹出重新登录对话框
+				runOnUiThread(new Runnable() {
+					@Override
+					public void run() {
+						promptRelogin(message);
+					}
+				});
+			}
+		});
+		// 登录/同步 按钮 -> 打开同步登录界面
+		Button btn_sync = (Button) findViewById(R.id.btn_sync);
+		if (btn_sync != null) {
+			btn_sync.setOnClickListener(new View.OnClickListener() {
+				@Override
+				public void onClick(View v) {
+					Intent it = new Intent(AlarmActivity.this, SyncLoginActivity.class);
+					startActivityForResult(it, REQUEST_CODE_SYNC_LOGIN);
+				}
+			});
+		}
+		// 若已登录，启动 30 秒轮询同步（后台线程）
+		if (m_syncManager.getClient().isLoggedIn()) {
+			new Thread(new Runnable() {
+				@Override
+				public void run() {
+					m_syncManager.startPeriodicSync();
+				}
+			}).start();
+		}
 		// 启动后自动检查更新（不依赖手动点击）
 		new Handler().postDelayed(new Runnable() {
 			@Override
@@ -597,6 +696,9 @@ public class AlarmActivity extends Activity {
 									btn_Add.setEnabled(true);
 								}
 							});
+							// 添加/修改股票后自动上传到云端
+							if (m_syncManager != null) m_syncManager.markStockModified(code);
+							triggerSyncUpload();
 						}
 						catch (ParseStockInfoException e) {
 							runOnUiThread(new Runnable() {
@@ -619,6 +721,9 @@ public class AlarmActivity extends Activity {
 										btn_Add.setEnabled(true);
 									}
 								});
+								// 更新后自动上传到云端
+								if (m_syncManager != null) m_syncManager.markStockModified(code);
+								triggerSyncUpload();
 							}
 							catch (Exception ee) {
 								ee.printStackTrace();
@@ -972,8 +1077,7 @@ public class AlarmActivity extends Activity {
 	public void onResume() {
 		super.onResume();
 		//DisableItems(m_stockMng.getStocks());
-		scheduleAutoHideHeader();
-		try {
+		scheduleAutoHideHeader();		try {
 			ListView list = (ListView) findViewById(R.id.ListView01);
 			if (list != null && list.getAdapter() instanceof android.widget.BaseAdapter) {
 				((android.widget.BaseAdapter) list.getAdapter()).notifyDataSetChanged();
@@ -1000,6 +1104,191 @@ public class AlarmActivity extends Activity {
 	private void scheduleAutoHideHeader() {
 		uiHandler.removeCallbacks(autoHideHeaderRunnable);
 		uiHandler.postDelayed(autoHideHeaderRunnable, AUTO_HIDE_HEADER_DELAY_MS);
+	}
+
+	/**
+	 * 触发云端全量上传（增/改/启用禁用后调用）。在子线程执行，不阻塞UI。
+	 *
+	 * 根因修复：之前未登录时这里直接 return，导致手机端"更新预警"保存后
+	 * 既不真正上传、也不给用户任何提示（静默失败），而设备上报走的是独立的
+	 * DeviceReporter，与服务端看到"设备上报正常"并不代表同步已登录。
+	 * 现在：未开启同步时给用户明确提示，避免静默丢数据；已登录则照常上传。
+	 */
+	private void triggerSyncUpload() {
+		if (m_syncManager == null) {
+			return;
+		}
+		if (!m_syncManager.getClient().isLoggedIn()) {
+			// 未开启多端同步：不再静默返回，明确告知用户修改未被上传
+			android.util.Log.w("sync", "股票已修改但未上传：未开启多端同步（sync_logged_in=false）");
+			postSyncMessage("未开启多端同步，本地修改未上传云端。请点击同步按钮登录后生效");
+			return;
+		}
+		new Thread(new Runnable() {
+			@Override
+			public void run() {
+				try {
+					m_syncManager.notifyStocksChanged();
+				} catch (Exception e) {
+					android.util.Log.e("sync", "上传失败: " + e.getMessage(), e);
+					postSyncMessage("上传云端失败：" + e.getMessage());
+				}
+			}
+		}).start();
+	}
+
+	/**
+	 * 在主线程安全地推送同步状态提示到界面（edit_stock_info）。
+	 */
+	private void postSyncMessage(final String msg) {
+		try {
+			runOnUiThread(new Runnable() {
+				@Override
+				public void run() {
+					try {
+						TextView eView = (TextView) findViewById(R.id.edit_stock_info);
+						if (eView != null) {
+							eView.setText(StockTime.GetTime() + " " + msg);
+						}
+					} catch (Exception ignore) {}
+				}
+			});
+		} catch (Exception ignore) {}
+	}
+
+	/**
+	 * 弹出“重新登录”引导对话框：当收到 HTTP 401 登录态失效时调用。
+	 * 手机号预填当前保存的账号，用户输入新密码后重新登录；
+	 * 登录成功后若存在因 401 失败而待重试的操作（如修改预警后上传），自动重试。
+	 * 必须在主线程调用。
+	 */
+	private void promptRelogin(final String message) {
+		if (reloginDialogShowing) {
+			// 已在展示重新登录对话框，避免重复弹出
+			return;
+		}
+		if (isFinishing() || isDestroyed()) {
+			return;
+		}
+		try {
+			reloginDialogShowing = true;
+			final SyncClient client = m_syncManager.getClient();
+			final EditText editPhone = new EditText(this);
+			editPhone.setInputType(android.text.InputType.TYPE_CLASS_PHONE);
+			editPhone.setHint("手机号");
+			String savedPhone = client.getPhone();
+			editPhone.setText(savedPhone == null ? "" : savedPhone);
+
+			final EditText editPwd = new EditText(this);
+			editPwd.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+			editPwd.setHint("输入新密码");
+
+			LinearLayout layout = new LinearLayout(this);
+			layout.setOrientation(LinearLayout.VERTICAL);
+			layout.setPadding(50, 20, 50, 10);
+			layout.addView(editPhone);
+			layout.addView(editPwd);
+
+			new AlertDialog.Builder(this)
+				.setTitle("登录已失效")
+				.setMessage("与服务器未匹配，请重新登录（手机号+新密码）\n" + (message == null ? "" : message))
+				.setView(layout)
+				.setCancelable(false)
+				.setPositiveButton("重新登录", new DialogInterface.OnClickListener() {
+					@Override
+					public void onClick(DialogInterface dialog, int which) {
+						final String phone = editPhone.getText().toString().trim();
+						final String pwd = editPwd.getText().toString();
+						if (phone.length() != 11 || pwd.length() == 0) {
+							Toast.makeText(AlarmActivity.this, "请输入正确的手机号和新密码", Toast.LENGTH_SHORT).show();
+							reloginDialogShowing = false; // 允许重新弹出
+							promptRelogin(message); // 重新弹出
+							return;
+						}
+						doRelogin(phone, pwd);
+					}
+				})
+				.setNegativeButton("取消", new DialogInterface.OnClickListener() {
+					@Override
+					public void onClick(DialogInterface dialog, int which) {
+						dialog.dismiss();
+						reloginDialogShowing = false;
+					}
+				})
+				.show();
+		} catch (Exception e) {
+			Log.e("sync", "重新登录引导失败: " + e.getMessage());
+		}
+	}
+
+	/**
+	 * 执行重新登录：用手机号+新密码调用服务端，成功后保存新 token，
+	 * 并自动重试因 401 失败的操作、触发全量同步。
+	 */
+	private void doRelogin(final String phone, final String pwd) {
+		postSyncMessage("正在重新登录...");
+		new Thread(new Runnable() {
+			@Override
+			public void run() {
+				try {
+					// 登录成功：SyncClient.login 内部会 saveToken 覆盖本地旧 token
+					m_syncManager.getClient().login(phone, pwd);
+					reloginDialogShowing = false; // 登录成功，关闭对话框守卫
+					// 重新登录成功：重试之前因 401 失败的修改/删除操作
+					boolean hadPending = m_syncManager.hasPendingRetry();
+					m_syncManager.retryPending();
+					// 全量同步 + 启动轮询
+					try {
+						m_syncManager.syncOnLogin();
+					} catch (Exception e) {
+						Log.w("sync", "重新登录后同步失败: " + e.getMessage());
+					}
+					m_syncManager.startPeriodicSync();
+					final boolean pending = hadPending;
+					runOnUiThread(new Runnable() {
+						@Override
+						public void run() {
+							postSyncMessage(pending ? "重新登录成功，已重试刚才的修改操作" : "重新登录成功");
+							Toast.makeText(AlarmActivity.this, "重新登录成功", Toast.LENGTH_SHORT).show();
+							try {
+								createListView(m_stockMng.getStocks());
+								DisableItems(m_stockMng.getStocks());
+							} catch (Exception ignore) {}
+						}
+					});
+				} catch (final Exception e) {
+					Log.w("sync", "重新登录失败: " + e.getMessage());
+					runOnUiThread(new Runnable() {
+						@Override
+						public void run() {
+							reloginDialogShowing = false; // 允许重新弹出
+							postSyncMessage("重新登录失败：" + e.getMessage());
+							Toast.makeText(AlarmActivity.this, "重新登录失败：" + e.getMessage(), Toast.LENGTH_LONG).show();
+							promptRelogin("重新登录失败");
+						}
+					});
+				}
+			}
+		}).start();
+	}
+
+	/**
+	 * 删除股票后同步云端。在子线程执行。
+	 */
+	private void syncDeleteStock(final String code) {
+		if (m_syncManager == null || !m_syncManager.getClient().isLoggedIn()) {
+			return;
+		}
+		new Thread(new Runnable() {
+			@Override
+			public void run() {
+				try {
+					m_syncManager.notifyStockDeleted(code);
+				} catch (Exception e) {
+					android.util.Log.e("sync", "删除同步失败: " + e.getMessage(), e);
+				}
+			}
+		}).start();
 	}
 
 	private void cancelAutoHideHeader() {
@@ -1038,6 +1327,33 @@ public class AlarmActivity extends Activity {
 	@Override
 	protected void onActivityResult(int requestCode, int resultCode, Intent data) {
 		super.onActivityResult(requestCode, resultCode, data);
+		if (requestCode == REQUEST_CODE_SYNC_LOGIN) {
+			// 从同步登录页返回：若已登录则触发全量同步 + 启动轮询
+			if (m_syncManager != null && m_syncManager.getClient().isLoggedIn()) {
+				new Thread(new Runnable() {
+					@Override
+					public void run() {
+						try {
+							m_syncManager.syncOnLogin();
+							m_syncManager.startPeriodicSync();
+						} catch (Exception e) {
+							android.util.Log.e("sync", "登录同步失败: " + e.getMessage(), e);
+						}
+						// 无论成败，回到主线程刷新列表
+						runOnUiThread(new Runnable() {
+							@Override
+							public void run() {
+								try {
+									createListView(m_stockMng.getStocks());
+									DisableItems(m_stockMng.getStocks());
+								} catch (Exception ignore) {}
+							}
+						});
+					}
+				}).start();
+			}
+			return;
+		}
 		if (m_update != null && m_update.handleInstallActivityResult(requestCode, resultCode, data)) {
 			return;
 		}
@@ -1935,6 +2251,8 @@ public class AlarmActivity extends Activity {
 				stockMng.Delete(code);
 				createListView(m_stockMng.getStocks());
 				DisableItems(m_stockMng.getStocks());
+				// 删除后同步云端
+				syncDeleteStock(code);
 				break;
 
 				//
@@ -1951,6 +2269,9 @@ public class AlarmActivity extends Activity {
 
 					stockMng.Update();
 					DisableItems(m_stockMng.getStocks());
+					// 启用/禁用后同步云端
+					if (m_syncManager != null) m_syncManager.markStockModified(code);
+					triggerSyncUpload();
 				}
 				catch(Exception e) {
 					setTitle(getTitle() + "diable + " + e.toString());
