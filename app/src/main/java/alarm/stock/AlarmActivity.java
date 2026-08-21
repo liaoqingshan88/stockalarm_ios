@@ -55,8 +55,12 @@ import static alarm.stock.Constants.*;
 //import static android.provider.BaseColumns._ID;
 import android.content.ComponentName;
 //import android.content.ContentValues;
+import android.content.BroadcastReceiver;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
+// 本地广播：用于本进程内通知主界面刷新，避免跨应用暴露
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 //add by ipdiy for stock mangage
 import alarm.stock.StockMng.*;
@@ -134,6 +138,61 @@ public class AlarmActivity extends Activity {
 
 	// 多端同步管理（登录/自动上传/轮询拉取）
 	private SyncManager m_syncManager;
+
+	// ===== 同步数据变更 → 立即刷新界面 =====
+	// 后台同步(StockAlertService 的 periodic sync)更新数据库后，由 SyncManager.applyServerStocks
+	// 发送本地广播 ACTION_SYNC_DATA_CHANGED。本接收器收到后【立即】从数据库重建并刷新列表，
+	// 保证界面显示的预警涨幅/跌幅阈值与最新预警条件一致，不依赖再次打开界面时的 onResume。
+	private final BroadcastReceiver syncDataChangedReceiver = new BroadcastReceiver() {
+		@Override
+		public void onReceive(android.content.Context c, android.content.Intent intent) {
+			if (intent == null) return;
+			String action = intent.getAction();
+			if (!SyncManager.ACTION_SYNC_DATA_CHANGED.equals(action)) return;
+			// 广播可能来自后台线程，切回主线程安全刷新；Activity 可能已销毁，判空保护
+			runOnUiThread(new Runnable() {
+				@Override
+				public void run() {
+					if (isFinishing() || isDestroyed()) return;
+					try {
+						reloadStockListFromDb();
+					} catch (Throwable t) {
+						Log.e("SyncRefresh", "同步后刷新界面失败: " + t.getMessage(), t);
+					}
+				}
+			});
+		}
+	};
+
+	/**
+	 * 从数据库重新加载股票列表并重建列表视图（供同步完成/界面重新可见时调用）。
+	 * 必须在主线程调用。
+	 */
+	private void reloadStockListFromDb() {
+		if (mySqlite == null || isFinishing() || isDestroyed()) return;
+		try {
+			List<StockMng> stocks = m_stockMng.getStocks();
+			// 空列表也要重建，以同步“另一端删光/清空”后界面上不再残留旧股票
+			ListView list = (ListView) findViewById(R.id.ListView01);
+			if (list == null) return;
+			if (stocks == null || stocks.isEmpty()) {
+				// 清空后列表为空：重建为空适配器，避免残留旧行
+				list.setAdapter(new SimpleAdapter(this, new ArrayList<HashMap<String, Object>>(),
+						R.layout.list_items,
+						new String[]{"name", "price", "chg", "high", "low", "rise", "drop"},
+						new int[]{R.id.list_name, R.id.list_price_now, R.id.list_change_now,
+								R.id.list_high, R.id.list_low, R.id.list_rise, R.id.list_drop}));
+				showHeaderControls();
+				return;
+			}
+			createListView(stocks);
+			DisableItems(stocks);
+			showHeaderControls();
+			Log.i("SyncRefresh", "同步数据已刷新界面，当前股票数=" + stocks.size());
+		} catch (Throwable t) {
+			Log.e("SyncRefresh", "从数据库重载列表失败: " + t.getMessage(), t);
+		}
+	}
 	private static final int REQUEST_CODE_SYNC_LOGIN = 2001;
 	// 重新登录对话框是否已在展示（避免 401 并发触发多个对话框）
 	private volatile boolean reloginDialogShowing = false;
@@ -1066,20 +1125,30 @@ public class AlarmActivity extends Activity {
 	@Override
 	public void onResume() {
 		super.onResume();
-		//DisableItems(m_stockMng.getStocks());
-		scheduleAutoHideHeader();		try {
-			ListView list = (ListView) findViewById(R.id.ListView01);
-			if (list != null && list.getAdapter() instanceof android.widget.BaseAdapter) {
-				((android.widget.BaseAdapter) list.getAdapter()).notifyDataSetChanged();
-			}
-		} catch (Exception ignore) {
+		scheduleAutoHideHeader();
+
+		// 注册本地广播：后台同步更新数据库后立即通知刷新（见 syncDataChangedReceiver）
+		try {
+			android.content.IntentFilter filter = new android.content.IntentFilter(SyncManager.ACTION_SYNC_DATA_CHANGED);
+			LocalBroadcastManager.getInstance(this).registerReceiver(syncDataChangedReceiver, filter);
+		} catch (Throwable t) {
+			Log.e("SyncRefresh", "注册同步广播失败: " + t.getMessage(), t);
 		}
+
+		// 界面重新可见时，直接从数据库重载，确保即使同步发生在界面不可见期间、
+		// 重新打开也能立刻显示最新预警阈值（onResume 兜底，但不是唯一手段）。
+		reloadStockListFromDb();
 	}
 
 	@Override
 	protected void onPause() {
 		super.onPause();
 		cancelAutoHideHeader();
+		// 注销本地广播，避免 Activity 销毁后仍持有引用
+		try {
+			LocalBroadcastManager.getInstance(this).unregisterReceiver(syncDataChangedReceiver);
+		} catch (Throwable ignore) {
+		}
 	}
 
 	@Override

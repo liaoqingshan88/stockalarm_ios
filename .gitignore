@@ -19,3 +19,6 @@ Thumbs.db
 keystore.properties
 *.jks
 *.keystore
+
+# Local temp/backup (不提交)
+tmp/

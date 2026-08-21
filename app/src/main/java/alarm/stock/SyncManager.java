@@ -70,6 +70,13 @@ public class SyncManager {
     public interface SyncListener {
         void onSyncMessage(String message);
     }
+
+    // 本地广播 Action：服务器数据发生变更（预警阈值/股票增删改）时发送，
+    // 供正在显示的主界面(AlarmActivity)监听后刷新列表，保证界面显示的涨幅阈值与预警条件一致。
+    public static final String ACTION_SYNC_DATA_CHANGED = "alarm.stock.action.SYNC_DATA_CHANGED";
+    private static final String EXTRA_ADDED = "added";
+    private static final String EXTRA_MODIFIED = "modified";
+    private static final String EXTRA_REMOVED = "removed";
     private SyncListener listener;
 
     // 会话失效（401）回调：由 Activity 注册，用于弹出重新登录引导
@@ -390,6 +397,9 @@ public class SyncManager {
     private void applyServerStocks(List<SyncClient.SyncStock> server, boolean preserveLocalTs) {
         if (server == null) return;
         StockMng stockMng = new StockMng(sqlite);
+        // 记录本次是否发生了实际数据变化（新增/修改/删除），有变化才广播通知前台 UI 刷新，
+        // 避免每 10 秒轮询无变化时也触发界面重建/闪烁。
+        boolean anyAdded = false, anyModified = false, anyRemoved = false;
         // 收集服务器上的所有 code，用于清理本地被删除的
         Map<String, SyncClient.SyncStock> serverMap = new HashMap<>();
         // 记录服务器已软删除(deleted:true 墓碑)的 code，供全量上传过滤防复活
@@ -411,6 +421,7 @@ public class SyncManager {
                     try {
                         stockMng.Delete(code);
                         removeLocalTimestamp(code);
+                        anyRemoved = true;
                     } catch (Exception e) {
                         Log.w(TAG, "删除本地股票失败: " + code, e);
                     }
@@ -425,12 +436,16 @@ public class SyncManager {
                 boolean exists = stockExists(stockMng, s.code);
                 if (exists) {
                     stockMng.Get(s.code);
+                    boolean changed = !(s.rise == stockMng.GetRise() && s.drop == stockMng.GetDrop()
+                            && s.valid == (stockMng.IsValid() ? 1 : 0));
                     stockMng.Set(s.code, s.name, s.price_h, s.price_l, s.rise, s.drop, s.valid == 1);
                     stockMng.Update();
+                    if (changed) anyModified = true;
                 } else {
                     stockMng.Set(s.code, s.name, s.price_h, s.price_l, s.rise, s.drop, s.valid == 1);
                     stockMng.Add();
                     addedNewStock = true; // 本机原先没有、由另一端同步过来的新股票
+                    anyAdded = true;
                 }
                 // 记录时间戳
                 long serverTs = s.last_modified > 0 ? s.last_modified : System.currentTimeMillis();
@@ -454,6 +469,24 @@ public class SyncManager {
         // 等 UI 先刷新价格并展示后再报警，避免“收到同步数据立即报警、界面价格却未更新”。
         if (addedNewStock) {
             Compare.markSyncNewStock();
+        }
+
+        // 问题：PC 端改了预警涨幅同步到手机后，数据库已更新（报警按新条件判断），
+        // 但前台界面没有刷新仍显示旧值。这里在检测到实际数据变化后发送本地广播，
+        // 通知正在显示的主界面(AlarmActivity)重新从数据库加载并刷新列表。
+        if (anyAdded || anyModified || anyRemoved) {
+            Log.i(TAG, "同步数据发生变化(新增=" + anyAdded + " 修改=" + anyModified
+                    + " 删除=" + anyRemoved + ")，广播通知前台刷新");
+            try {
+                android.content.Intent intent = new android.content.Intent(ACTION_SYNC_DATA_CHANGED)
+                        .putExtra(EXTRA_ADDED, anyAdded)
+                        .putExtra(EXTRA_MODIFIED, anyModified)
+                        .putExtra(EXTRA_REMOVED, anyRemoved);
+                androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(context)
+                        .sendBroadcast(intent);
+            } catch (Throwable t) {
+                Log.w(TAG, "广播同步变更通知失败: " + t.getMessage());
+            }
         }
     }
 
