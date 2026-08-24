@@ -389,6 +389,15 @@ class Compare extends AsyncTask<StockMng, TextView, List<SinaStockInfo>>{
 	 * @return 命中的预警消息，无则返回 null
 	 */
 	public static AlarmInfo checkAndNotify(android.content.Context ctx, StockMng stockMng, MaPriceMng maMng, MaAlarmLogMng maAlarmLogMng) {
+		return checkAndNotify(ctx, stockMng, maMng, maAlarmLogMng, null);
+	}
+
+	/**
+	 * 后台保活预警检查（指定待检查的股票代码子集）。
+	 * 港股延长时段(11:30-12:00、15:00-16:00)只查港股时，由调用方传入过滤后的 codes。
+	 * @param codes 要检查的股票代码；为 null 时取本地全部激活股票（stockMng.GetCodes()）
+	 */
+	public static AlarmInfo checkAndNotify(android.content.Context ctx, StockMng stockMng, MaPriceMng maMng, MaAlarmLogMng maAlarmLogMng, String[] codes) {
 		try {
 			if (stockMng == null) return null;
 
@@ -399,7 +408,9 @@ class Compare extends AsyncTask<StockMng, TextView, List<SinaStockInfo>>{
 				return null;
 			}
 
-			String[] codes = stockMng.GetCodes();
+			if (codes == null) {
+				codes = stockMng.GetCodes();
+			}
 			if (codes == null || codes.length == 0) return null;
 
 			SinaStockClient client = SinaStockClient.getInstance();
@@ -420,14 +431,22 @@ class Compare extends AsyncTask<StockMng, TextView, List<SinaStockInfo>>{
 	public static AlarmInfo compareAllStocks(StockMng stockMng, List<SinaStockInfo> stockinfo, MaPriceMng maMng, MaAlarmLogMng maAlarmLogMng ) {
 		try{
 			List<StockMng> listStocks = stockMng.getStocks();
-			int i=0, j =0;
 			PeakValleyTracker.resetForNewDay();
 
-			for (i = 0; i < listStocks.size(); i++) {
+			// 按股票代码建立映射，支持任意「待检查代码子集」（如港股延长时段只查港股），
+			// 避免依赖 stockinfo 与 listStocks 顺序一一对应。
+			Map<String, SinaStockInfo> infoByCode = new HashMap<String, SinaStockInfo>();
+			for (SinaStockInfo si : stockinfo) {
+				if (si != null && si.getCode() != null) {
+					infoByCode.put(si.getCode().toLowerCase(), si);
+				}
+			}
+
+			for (int i = 0; i < listStocks.size(); i++) {
 				StockMng stock = listStocks.get(i);
 				if (!stock.IsValid()) continue;
-				if (j >= stockinfo.size()) break;
-				SinaStockInfo stock1 = stockinfo.get(j++);
+				SinaStockInfo stock1 = infoByCode.get(stock.GetCode().toLowerCase());
+				if (stock1 == null) continue;
 				int ret = stock.Compare(stock1.getNowPrice(), stock1.getYestodayPrice());
 				if (CMP_RESULT_NONE != ret) {
 					return new AlarmInfo(stock1.getName()+"-"+stock.GetCmpareResult(), i, stock.GetCode());

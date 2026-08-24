@@ -39,8 +39,9 @@ public class SyncManager {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final AtomicBoolean syncing = new AtomicBoolean(false);
 
-    // 10 秒轮询间隔（从 30 秒调小，提升跨端同步时效；首次触发与循环共用此常量）
-    private static final long POLL_INTERVAL_MS = 10_000L;
+    // 轮询间隔（毫秒）。交易时间用高频(10秒)，非交易时间由 StockAlertService 调长(30分钟)以省电。
+    public static final long DEFAULT_POLL_INTERVAL_MS = 10_000L;
+    private volatile long pollIntervalMs = DEFAULT_POLL_INTERVAL_MS;
 
     // 轮询任务是否已启动
     private boolean pollingStarted = false;
@@ -62,7 +63,11 @@ public class SyncManager {
                     }
                 }).start();
             }
-            handler.postDelayed(this, POLL_INTERVAL_MS);
+            try {
+                handler.postDelayed(this, pollIntervalMs);
+            } catch (Throwable t) {
+                // ignore
+            }
         }
     };
 
@@ -301,14 +306,33 @@ public class SyncManager {
     // ==================== 定时拉取合并 ====================
 
     /**
-     * 启动 10 秒轮询。重复调用安全。
+     * 启动轮询（默认 10 秒）。重复调用安全。
      */
     public void startPeriodicSync() {
-        if (pollingStarted) return;
+        startPeriodicSync(DEFAULT_POLL_INTERVAL_MS);
+    }
+
+    /**
+     * 启动轮询，指定间隔。重复调用安全；已运行时仅更新间隔。
+     * @param intervalMs 轮询间隔毫秒
+     */
+    public void startPeriodicSync(long intervalMs) {
         if (!client.isLoggedIn()) return;
-        pollingStarted = true;
-        handler.postDelayed(pollRunnable, POLL_INTERVAL_MS);
-        Log.i(TAG, "已启动 " + (POLL_INTERVAL_MS / 1000) + " 秒轮询同步");
+        this.pollIntervalMs = intervalMs > 0 ? intervalMs : DEFAULT_POLL_INTERVAL_MS;
+        if (!pollingStarted) {
+            pollingStarted = true;
+            handler.postDelayed(pollRunnable, this.pollIntervalMs);
+            Log.i(TAG, "已启动 " + (this.pollIntervalMs / 1000) + " 秒轮询同步");
+        }
+    }
+
+    /**
+     * 动态调整已运行轮询的间隔（交易/非交易切换时由 StockAlertService 调用）。
+     * @param intervalMs 新的间隔毫秒
+     */
+    public void setPollInterval(long intervalMs) {
+        this.pollIntervalMs = intervalMs > 0 ? intervalMs : DEFAULT_POLL_INTERVAL_MS;
+        Log.i(TAG, "轮询同步间隔调整为 " + (this.pollIntervalMs / 1000) + " 秒");
     }
 
     /**
