@@ -230,13 +230,13 @@ public final class SinaStockClient {
 			return null;
 		}
 
-		StringBuilder sb = new StringBuilder(getQueryCode(stockCodes[0]));
+		StringBuilder sb = new StringBuilder(getQuoteQueryCode(stockCodes[0]));
 		final int length = stockCodes.length;
 
 		for(int i = 1; i < length; ++i) {
 			if( stockCodes[i]!=null) { //add   by ipdiy .
 				sb.append(',');
-				sb.append(getQueryCode(stockCodes[i]));//add getQueryCode  by ipdiy .
+				sb.append(getQuoteQueryCode(stockCodes[i]));// 港股加 r_ 前缀取实时价，A股不变
 			}
 		}
 
@@ -289,6 +289,18 @@ public final class SinaStockClient {
 			}
 			method.releaseConnection();
 		}
+	}
+
+		/**
+	 * 行情请求专用：港股加 r_ 前缀以获取实时价（如 r_hk06060）。
+	 * 注意：腾讯 API 港股必须带 r_ 前缀才返回实时价；A股加 r_ 前缀反而无效，因此仅对港股加。
+	 */
+	private String getQuoteQueryCode(String code) {
+		String base = getQueryCode(code);
+		if (base != null && base.toLowerCase().startsWith("hk")) {
+			return "r_" + base;
+		}
+		return base;
 	}
 
 	//example:from "000002" to "sz000002" (腾讯API格式)

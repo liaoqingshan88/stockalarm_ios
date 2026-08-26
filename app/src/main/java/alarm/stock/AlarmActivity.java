@@ -346,6 +346,13 @@ public class AlarmActivity extends Activity {
 	private String lastHeaderPriceBaseText = "现价";
 	private String lastHeaderChgBaseText = "现涨";
 
+	// ===== 最近一次成功获取的价格缓存（问题2：切回应用时避免价格归0）=====
+	// key=股票代码(小写)，value[0]=价格显示串，value[1]=涨幅显示串。
+	// 界面每次成功拉到行情后由 ReflashStockPrice 写入；重建列表(onResume/同步)时用其兜底显示最近价格，
+	// 再由后台 Compare 定时刷新覆盖为最新价。
+	private static final java.util.Map<String, String[]> lastPriceCache =
+			new java.util.concurrent.ConcurrentHashMap<String, String[]>();
+
 	
 	/** Called when the activity is first created. */
 	@Override
@@ -2139,7 +2146,19 @@ public class AlarmActivity extends Activity {
 					map.put("chg", String.format("%.1f", changePercent));
 				}
 			} else {
-				map.put("price", "0.0");
+				// 无实时价格：优先用最近一次价格缓存，避免切回应用时价格显示为 0，
+				// 随后后台 Compare 拉到新行情会覆盖刷新为最新价。
+				String[] cached = null;
+				if (stock.GetCode() != null) {
+					cached = lastPriceCache.get(stock.GetCode().toLowerCase());
+				}
+				if (cached != null) {
+					map.put("price", cached[0]);
+					map.put("chg", cached[1]);
+				} else {
+					map.put("price", "0.0");
+					map.put("chg", "0.0");
+				}
 				// 价格精确到分（保留两位小数）
 				map.put("high", String.format("%.2f", stock.GetHigh()));
 				map.put("low", String.format("%.2f", stock.GetLow()));
@@ -2399,6 +2418,10 @@ public class AlarmActivity extends Activity {
 							item.put("chg", String.format("%.1f", changePercent));
 						} else {
 							item.put("chg", "0.0");
+						}
+						// 写入最近一次价格缓存，供重建列表(onResume/同步)时短充显示，避免价格归0
+						if (stockCode != null) {
+							lastPriceCache.put(stockCode.toLowerCase(), new String[]{newPrice, String.valueOf(item.get("chg"))});
 						}
 						dataChanged = true;
 					}
