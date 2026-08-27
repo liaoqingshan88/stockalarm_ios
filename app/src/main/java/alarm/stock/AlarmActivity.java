@@ -2098,10 +2098,42 @@ public class AlarmActivity extends Activity {
 	void createListView(List<StockMng> list_stock) {
 		createListView(list_stock, null);
 	}
+
+	/**
+	 * 重建列表前，把当前界面已显示的价格快照进 lastPriceCache，
+	 * 这样重建后即使没有拉到最新行情，也能用最近一次界面价格兜底，
+	 * 避免整表价格闪成 0（解决刷新时序导致的闪烁）。
+	 */
+	private void snapshotCurrentPricesToCache() {
+		try {
+			ListView list = (ListView) findViewById(R.id.ListView01);
+			if (list == null) return;
+			android.widget.ListAdapter adapter = list.getAdapter();
+			if (adapter == null) return;
+			for (int i = 0; i < adapter.getCount(); i++) {
+				Object obj = adapter.getItem(i);
+				if (!(obj instanceof java.util.Map)) continue;
+				@SuppressWarnings("unchecked")
+				java.util.Map<String, Object> item = (java.util.Map<String, Object>) obj;
+				Object code = item.get("code");
+				if (code == null) continue;
+				Object price = item.get("price");
+				Object chg = item.get("chg");
+				if (price == null) continue;
+				lastPriceCache.put(String.valueOf(code).toLowerCase(),
+						new String[]{String.valueOf(price), chg == null ? "0.0" : String.valueOf(chg)});
+			}
+		} catch (Exception e) {
+			Log.w("SnapshotPrices", "快照价格失败: " + e.getMessage());
+		}
+	}
 	
 	void createListView(List<StockMng> list_stock, List<SinaStockInfo> stockInfos) {
 		//绑定Layout里面的ListView
 		ListView list = (ListView) findViewById(R.id.ListView01);
+		// 重建前先把当前界面已显示的价格快照进 lastPriceCache，
+		// 这样新列表条目在不匹配到最新行情时能用最近一次价格兕底，避免整表闪 0。
+		snapshotCurrentPricesToCache();
 		//生成动态数组，加入数据
 		ArrayList<HashMap<String, Object>> listItem = new ArrayList<HashMap<String, Object>>();
 		if( list_stock.size() == 0)//add 2013.5.21
@@ -2109,11 +2141,16 @@ public class AlarmActivity extends Activity {
 			return ;
 		}
 
-		// 创建股票代码到价格信息的映射
+		// 创建股票代码到价格信息的映射（与 ReflashStockPrice 保持一致：代码优先，名称兕底）
 		java.util.HashMap<String, SinaStockInfo> priceMap = new java.util.HashMap<String, SinaStockInfo>();
 		if (stockInfos != null) {
 			for (SinaStockInfo info : stockInfos) {
-				// 通过股票名称匹配（因为SinaStockInfo中没有代码信息）
+				if (info == null) continue;
+				String queryCode = info.getCode();
+				if (queryCode != null) {
+					priceMap.put(queryCode, info);
+				}
+				// 名称兕底（兼容新浪接口 code 可能为空）
 				priceMap.put(info.getName(), info);
 			}
 		}
@@ -2130,20 +2167,31 @@ public class AlarmActivity extends Activity {
 			// 当前涨幅（相对昨收），默认 0.0（保留 1 位小数）
 			map.put("chg", "0.0");
 			
-			// 如果有价格信息，使用实际价格；否则使用0.0
-			SinaStockInfo priceInfo = priceMap.get(stock.GetName());
+			// 如果有价格信息，使用实际价格；否则使用缓存或0.0
+			// 匹配策略：优先用股票代码（GetCode 是带 sh/sz/hk 前缀的查询代码，与接口 code 一致），兕底用名称
+			String stockCode = stock.GetCode();
+			String stockName = stock.GetName();
+			SinaStockInfo priceInfo = (stockCode != null) ? priceMap.get(stockCode) : null;
+			if (priceInfo == null && stockName != null) {
+				priceInfo = priceMap.get(stockName);
+			}
 			if (priceInfo != null) {
 				// 价格精确到分（保留两位小数）
-				map.put("price", String.format("%.2f", priceInfo.getNowPrice()));
+				float nowPrice = priceInfo.getNowPrice();
+				map.put("price", String.format("%.2f", nowPrice));
 				// “高价/低价”显示的是你预设的预警阈值（高于/低于），不是实时最高/最低价
 				map.put("high", String.format("%.2f", stock.GetHigh()));
 				map.put("low", String.format("%.2f", stock.GetLow()));
 				// 计算当前涨幅（相对昨收），保留 1 位小数
 				float yesterdayPrice = priceInfo.getYestodayPrice();
-				float nowPrice = priceInfo.getNowPrice();
 				if (yesterdayPrice > 0) {
 					float changePercent = ((nowPrice - yesterdayPrice) / yesterdayPrice) * 100;
 					map.put("chg", String.format("%.1f", changePercent));
+				}
+				// 同时写入缓存，供后续无行情重建时兕底
+				if (stockCode != null) {
+					lastPriceCache.put(stockCode.toLowerCase(),
+							new String[]{String.valueOf(map.get("price")), String.valueOf(map.get("chg"))});
 				}
 			} else {
 				// 无实时价格：优先用最近一次价格缓存，避免切回应用时价格显示为 0，
