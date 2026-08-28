@@ -153,6 +153,408 @@
         </RadioGroup>
     </LinearLayout>
 
+    <!-- 均线预警设置 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp"
+        android:layout_marginBottom="4dp"
+        android:background="#FFFFFF">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="均线预警设置"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="#000000"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="选择股票"
+            android:textSize="13sp"
+            android:textColor="#666666"
+            android:layout_marginBottom="2dp" />
+
+        <Spinner
+            android:id="@+id/spinner_ma_stock"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp" />
+
+        <!-- 7 条均线：MA5/MA10/MA20/MA30/MA60/MA120/MA250 -->
+        <LinearLayout
+            android:id="@+id/ma_row_5"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="MA5"
+                android:textSize="14sp"
+                android:textColor="#000000" />
+            <RadioGroup
+                android:id="@+id/ma_radio_group_5"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+                <RadioButton
+                    android:id="@+id/ma_radio_on_5"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="开启"
+                    android:textSize="13sp"
+                    android:textColor="#000000" />
+                <RadioButton
+                    android:id="@+id/ma_radio_off_5"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="关闭"
+                    android:textSize="13sp"
+                    android:textColor="#666666"
+                    android:layout_marginLeft="8dp" />
+            </RadioGroup>
+            <EditText
+                android:id="@+id/ma_edit_5"
+                android:layout_width="76dp"
+                android:layout_height="wrap_content"
+                android:inputType="numberDecimal"
+                android:singleLine="true"
+                android:hint="价格"
+                android:textSize="14sp"
+                android:textColor="#000000"
+                android:textColorHint="#999999"
+                android:background="#FFFFFF"
+                android:padding="4dp"
+                android:layout_marginLeft="8dp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/ma_row_10"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="MA10"
+                android:textSize="14sp"
+                android:textColor="#000000" />
+            <RadioGroup
+                android:id="@+id/ma_radio_group_10"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+                <RadioButton
+                    android:id="@+id/ma_radio_on_10"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="开启"
+                    android:textSize="13sp"
+                    android:textColor="#000000" />
+                <RadioButton
+                    android:id="@+id/ma_radio_off_10"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="关闭"
+                    android:textSize="13sp"
+                    android:textColor="#666666"
+                    android:layout_marginLeft="8dp" />
+            </RadioGroup>
+            <EditText
+                android:id="@+id/ma_edit_10"
+                android:layout_width="76dp"
+                android:layout_height="wrap_content"
+                android:inputType="numberDecimal"
+                android:singleLine="true"
+                android:hint="价格"
+                android:textSize="14sp"
+                android:textColor="#000000"
+                android:textColorHint="#999999"
+                android:background="#FFFFFF"
+                android:padding="4dp"
+                android:layout_marginLeft="8dp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/ma_row_20"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="MA20"
+                android:textSize="14sp"
+                android:textColor="#000000" />
+            <RadioGroup
+                android:id="@+id/ma_radio_group_20"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+                <RadioButton
+                    android:id="@+id/ma_radio_on_20"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="开启"
+                    android:textSize="13sp"
+                    android:textColor="#000000" />
+                <RadioButton
+                    android:id="@+id/ma_radio_off_20"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="关闭"
+                    android:textSize="13sp"
+                    android:textColor="#666666"
+                    android:layout_marginLeft="8dp" />
+            </RadioGroup>
+            <EditText
+                android:id="@+id/ma_edit_20"
+                android:layout_width="76dp"
+                android:layout_height="wrap_content"
+                android:inputType="numberDecimal"
+                android:singleLine="true"
+                android:hint="价格"
+                android:textSize="14sp"
+                android:textColor="#000000"
+                android:textColorHint="#999999"
+                android:background="#FFFFFF"
+                android:padding="4dp"
+                android:layout_marginLeft="8dp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/ma_row_30"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="MA30"
+                android:textSize="14sp"
+                android:textColor="#000000" />
+            <RadioGroup
+                android:id="@+id/ma_radio_group_30"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+                <RadioButton
+                    android:id="@+id/ma_radio_on_30"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="开启"
+                    android:textSize="13sp"
+                    android:textColor="#000000" />
+                <RadioButton
+                    android:id="@+id/ma_radio_off_30"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="关闭"
+                    android:textSize="13sp"
+                    android:textColor="#666666"
+                    android:layout_marginLeft="8dp" />
+            </RadioGroup>
+            <EditText
+                android:id="@+id/ma_edit_30"
+                android:layout_width="76dp"
+                android:layout_height="wrap_content"
+                android:inputType="numberDecimal"
+                android:singleLine="true"
+                android:hint="价格"
+                android:textSize="14sp"
+                android:textColor="#000000"
+                android:textColorHint="#999999"
+                android:background="#FFFFFF"
+                android:padding="4dp"
+                android:layout_marginLeft="8dp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/ma_row_60"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="MA60"
+                android:textSize="14sp"
+                android:textColor="#000000" />
+            <RadioGroup
+                android:id="@+id/ma_radio_group_60"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+                <RadioButton
+                    android:id="@+id/ma_radio_on_60"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="开启"
+                    android:textSize="13sp"
+                    android:textColor="#000000" />
+                <RadioButton
+                    android:id="@+id/ma_radio_off_60"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="关闭"
+                    android:textSize="13sp"
+                    android:textColor="#666666"
+                    android:layout_marginLeft="8dp" />
+            </RadioGroup>
+            <EditText
+                android:id="@+id/ma_edit_60"
+                android:layout_width="76dp"
+                android:layout_height="wrap_content"
+                android:inputType="numberDecimal"
+                android:singleLine="true"
+                android:hint="价格"
+                android:textSize="14sp"
+                android:textColor="#000000"
+                android:textColorHint="#999999"
+                android:background="#FFFFFF"
+                android:padding="4dp"
+                android:layout_marginLeft="8dp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/ma_row_120"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="MA120"
+                android:textSize="14sp"
+                android:textColor="#000000" />
+            <RadioGroup
+                android:id="@+id/ma_radio_group_120"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+                <RadioButton
+                    android:id="@+id/ma_radio_on_120"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="开启"
+                    android:textSize="13sp"
+                    android:textColor="#000000" />
+                <RadioButton
+                    android:id="@+id/ma_radio_off_120"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="关闭"
+                    android:textSize="13sp"
+                    android:textColor="#666666"
+                    android:layout_marginLeft="8dp" />
+            </RadioGroup>
+            <EditText
+                android:id="@+id/ma_edit_120"
+                android:layout_width="76dp"
+                android:layout_height="wrap_content"
+                android:inputType="numberDecimal"
+                android:singleLine="true"
+                android:hint="价格"
+                android:textSize="14sp"
+                android:textColor="#000000"
+                android:textColorHint="#999999"
+                android:background="#FFFFFF"
+                android:padding="4dp"
+                android:layout_marginLeft="8dp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/ma_row_250"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="MA250"
+                android:textSize="14sp"
+                android:textColor="#000000" />
+            <RadioGroup
+                android:id="@+id/ma_radio_group_250"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+                <RadioButton
+                    android:id="@+id/ma_radio_on_250"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="开启"
+                    android:textSize="13sp"
+                    android:textColor="#000000" />
+                <RadioButton
+                    android:id="@+id/ma_radio_off_250"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="关闭"
+                    android:textSize="13sp"
+                    android:textColor="#666666"
+                    android:layout_marginLeft="8dp" />
+            </RadioGroup>
+            <EditText
+                android:id="@+id/ma_edit_250"
+                android:layout_width="76dp"
+                android:layout_height="wrap_content"
+                android:inputType="numberDecimal"
+                android:singleLine="true"
+                android:hint="价格"
+                android:textSize="14sp"
+                android:textColor="#000000"
+                android:textColorHint="#999999"
+                android:background="#FFFFFF"
+                android:padding="4dp"
+                android:layout_marginLeft="8dp" />
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/btn_save_ma"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="保存均线设置"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="#000000"
+            android:background="#FFFFFF"
+            android:layout_marginTop="4dp" />
+    </LinearLayout>
+
     <!-- 软件修改意见 -->
     <LinearLayout
         android:layout_width="match_parent"

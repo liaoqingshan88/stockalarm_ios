@@ -749,6 +749,8 @@ public class AlarmActivity extends Activity {
 									// 直接使用价格信息创建ListView
 									createListView(m_stockMng.getStocks(), finalAllStockInfo);
 									DisableItems(m_stockMng.getStocks());
+									// 刷新完成后，光标/高亮停留在刚添加/更新的这只股票上
+									highlightStockAfterRefresh(code);
 									btn_Add.setEnabled(true);
 								}
 							});
@@ -774,6 +776,8 @@ public class AlarmActivity extends Activity {
 									public void run() {
 										createListView(m_stockMng.getStocks());
 										DisableItems(m_stockMng.getStocks());
+										// 刷新完成后，光标/高亮停留在刚更新的这只股票上
+										highlightStockAfterRefresh(code);
 										btn_Add.setEnabled(true);
 									}
 								});
@@ -1972,6 +1976,49 @@ public class AlarmActivity extends Activity {
 				}
 			}
 		});
+	}
+
+	/**
+	 * “更新预警/添加预警”刷新完成后调用：将列表光标/高亮停留在刚保存的这只股票上，
+	 * 并滚动定位使其可见。code 为刚添加/更新的股票代码。
+	 */
+	private void highlightStockAfterRefresh(final String code) {
+		if (code == null || code.length() == 0) return;
+		final ListView listview = (ListView) findViewById(R.id.ListView01);
+		if (listview == null) return;
+		final android.widget.ListAdapter adapter = listview.getAdapter();
+		if (adapter == null) return;
+
+		// 在列表中定位该股票（排序后实时查找，避免依赖固定位置）
+		int target = -1;
+		for (int i = 0; i < adapter.getCount(); i++) {
+			try {
+				Object obj = adapter.getItem(i);
+				if (obj instanceof java.util.Map) {
+					Object c = ((java.util.Map<?, ?>) obj).get("code");
+					if (c != null && code.equals(String.valueOf(c))) {
+						target = i;
+						break;
+					}
+				}
+			} catch (Exception ignore) {}
+		}
+
+		// 用真实 code 回写全局高亮，并滚动定位到该行
+		highlightedCode = code;
+		highlightedPosition = target;
+		try {
+			if (adapter instanceof android.widget.BaseAdapter) {
+				((android.widget.BaseAdapter) adapter).notifyDataSetChanged();
+			}
+			if (target >= 0) {
+				listview.smoothScrollToPosition(target);
+			}
+			// 重新应用各行高亮/禁用背景
+			DisableItems(m_stockMng.getStocks());
+		} catch (Exception e) {
+			Log.w("highlightStockAfterRefresh", "高亮定位失败: " + e.getMessage());
+		}
 	}
 
 	/**

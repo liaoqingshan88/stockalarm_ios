@@ -5,17 +5,22 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.media.RingtoneManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.util.Log;
 import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -26,6 +31,8 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.util.ArrayList;
+import java.util.List;
 
 public class SettingsActivity extends Activity {
 	
@@ -46,6 +53,17 @@ public class SettingsActivity extends Activity {
 	private Button btnSubmitFeedback;
 	private TextView textSubmitStatus;
 	private SharedPreferences prefs;
+
+	// 均线预警设置
+	private static final int[] MA_DISPLAY_PERIODS = {5, 10, 20, 30, 60, 120, 250};
+	private Spinner spinnerMaStock;
+	private Button btnSaveMa;
+	private ArrayList<String> maStockLabels;   // 显示 "代码 名称"
+	private ArrayList<String> maStockCodes;    // 对应代码
+	private StockSQLite maSqlite;
+	private MaPriceMng maPriceMng;
+	private RadioGroup[] maRadioGroups;        // 每个周期一行（开启/关闭）
+	private EditText[] maEditTexts;            // 每个周期价格输入框
 	
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -79,6 +97,10 @@ public class SettingsActivity extends Activity {
 		
 		// 加载保存的设置
 		loadSettings();
+
+		// 均线预警设置
+		setupMaPriceSettings();
+
 		
 		// 振动开关
 		checkVibrate.setOnClickListener(new View.OnClickListener() {
@@ -127,6 +149,149 @@ public class SettingsActivity extends Activity {
 				}
 			});
 		}
+	}
+
+	/**
+	 * 均线预警设置：初始化股票下拉框、7条均线输入行、保存按钮逻辑。
+	 */
+	private void setupMaPriceSettings() {
+		spinnerMaStock = (Spinner) findViewById(R.id.spinner_ma_stock);
+		btnSaveMa = (Button) findViewById(R.id.btn_save_ma);
+		if (spinnerMaStock == null || btnSaveMa == null) {
+			return;
+		}
+
+		maStockLabels = new ArrayList<String>();
+		maStockCodes = new ArrayList<String>();
+		maSqlite = new StockSQLite(this);
+		maPriceMng = new MaPriceMng(maSqlite);
+
+		// 关联每个周期的 RadioGroup 与 EditText（下标与 MA_DISPLAY_PERIODS 一一对应）
+		final int[] groupIds = {R.id.ma_radio_group_5, R.id.ma_radio_group_10, R.id.ma_radio_group_20,
+			R.id.ma_radio_group_30, R.id.ma_radio_group_60, R.id.ma_radio_group_120, R.id.ma_radio_group_250};
+		final int[] editIds  = {R.id.ma_edit_5, R.id.ma_edit_10, R.id.ma_edit_20,
+			R.id.ma_edit_30, R.id.ma_edit_60, R.id.ma_edit_120, R.id.ma_edit_250};
+		maRadioGroups = new RadioGroup[MA_DISPLAY_PERIODS.length];
+		maEditTexts = new EditText[MA_DISPLAY_PERIODS.length];
+		for (int i = 0; i < MA_DISPLAY_PERIODS.length; i++) {
+			maRadioGroups[i] = (RadioGroup) findViewById(groupIds[i]);
+			maEditTexts[i] = (EditText) findViewById(editIds[i]);
+		}
+
+		// 读取数据库所有股票（代码 名称）
+		SQLiteDatabase db = maSqlite.getReadableDatabase();
+		Cursor cursor = null;
+		try {
+			cursor = db.query(Constants.TABLE_NAME,
+				new String[]{Constants.F_CODE, Constants.F_NAME},
+				null, null, null, null, null);
+			if (cursor != null) {
+				while (cursor.moveToNext()) {
+					String code = cursor.getString(0);
+					String name = cursor.getString(1);
+					maStockCodes.add(code);
+					maStockLabels.add(code + " " + name);
+				}
+			}
+		} catch (Exception e) {
+			Log.e("Settings", "加载股票列表失败: " + e.getMessage(), e);
+		} finally {
+			if (cursor != null) cursor.close();
+		}
+
+		ArrayAdapter<String> adapter = new ArrayAdapter<String>(this,
+				android.R.layout.simple_spinner_item, maStockLabels);
+		adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+		spinnerMaStock.setAdapter(adapter);
+
+		// 切换股票时回填均线价格
+		spinnerMaStock.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+			@Override
+			public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+				if (position < 0 || position >= maStockCodes.size()) return;
+				String code = maStockCodes.get(position);
+				float[] prices = maPriceMng.getMaPrices(code);
+				fillMaPrices(prices);
+			}
+
+			@Override
+			public void onNothingSelected(AdapterView<?> parent) {
+			}
+		});
+
+		// 保存按钮
+		btnSaveMa.setOnClickListener(new View.OnClickListener() {
+			@Override
+			public void onClick(View v) {
+				saveMaPrices();
+			}
+		});
+	}
+
+	/**
+	 * 将某股票的均线价格回填到界面（-1 表示未启用，%.2f 显示）。
+	 */
+	private void fillMaPrices(float[] prices) {
+		if (maRadioGroups == null || maEditTexts == null || prices == null) return;
+		for (int i = 0; i < MA_DISPLAY_PERIODS.length && i < prices.length; i++) {
+			float p = prices[i];
+			RadioGroup group = maRadioGroups[i];
+			EditText edit = maEditTexts[i];
+			int onId = (i == 0) ? R.id.ma_radio_on_5
+				: (i == 1) ? R.id.ma_radio_on_10
+				: (i == 2) ? R.id.ma_radio_on_20
+				: (i == 3) ? R.id.ma_radio_on_30
+				: (i == 4) ? R.id.ma_radio_on_60
+				: (i == 5) ? R.id.ma_radio_on_120
+				: R.id.ma_radio_on_250;
+			if (p > 0) {
+				group.check(onId);
+				edit.setText(String.format("%.2f", p));
+			} else {
+				group.clearCheck();
+				edit.setText("");
+			}
+		}
+	}
+
+	/**
+	 * 保存当前选中股票的均线设置：开启且价格>0 存价格，否则存 -1。
+	 */
+	private void saveMaPrices() {
+		int position = spinnerMaStock.getSelectedItemPosition();
+		if (position < 0 || position >= maStockCodes.size()) {
+			Toast.makeText(this, "请先选择股票", Toast.LENGTH_SHORT).show();
+			return;
+		}
+		String code = maStockCodes.get(position);
+		float[] prices = new float[MA_DISPLAY_PERIODS.length];
+		for (int i = 0; i < MA_DISPLAY_PERIODS.length; i++) {
+			RadioGroup group = maRadioGroups[i];
+			EditText edit = maEditTexts[i];
+			int onId = (i == 0) ? R.id.ma_radio_on_5
+				: (i == 1) ? R.id.ma_radio_on_10
+				: (i == 2) ? R.id.ma_radio_on_20
+				: (i == 3) ? R.id.ma_radio_on_30
+				: (i == 4) ? R.id.ma_radio_on_60
+				: (i == 5) ? R.id.ma_radio_on_120
+				: R.id.ma_radio_on_250;
+			boolean enabled = group != null && group.getCheckedRadioButtonId() == onId;
+			float price = 0;
+			if (edit != null && edit.getText() != null) {
+				try {
+					price = Float.parseFloat(edit.getText().toString().trim());
+				} catch (Exception e) {
+					price = 0;
+				}
+			}
+			if (enabled && price > 0) {
+				prices[i] = price;
+			} else {
+				prices[i] = -1f;
+			}
+		}
+		maPriceMng.saveMaPrices(code, prices);
+		Toast.makeText(this, "均线已更新", Toast.LENGTH_SHORT).show();
 	}
 
 	private void submitFeedback() {
