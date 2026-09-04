@@ -428,6 +428,64 @@ class Compare extends AsyncTask<StockMng, TextView, List<SinaStockInfo>>{
 		return null;
 	}
 
+	/**
+	 * 代码归一化键：把各种写法统一成规范键，用于行情与本地股票的精确匹配。
+	 * 兼容：
+	 *  - 港股：02587（腾讯返回的纯数字字段） / hk2587 / hk02587 / HK00700 / 00700.HK / r_hk02587
+	 *  - A股：600519 / sh600519 / sz000002 / 000002 等
+	 * 统一规则：港股 → "hk"+补零至5位数字；6位纯数字按 sh/sz/bj 前缀，其余保留可识别前缀+数字。
+	 * 与 SinaStockClient.getQueryCode 逻辑保持一致，保证任意来源（本地用户输入、腾讯返回字段）都能对齐。
+	 */
+	private static String normalizeCodeKey(String code) {
+		if (code == null) return null;
+		String c = code.trim().replace("．", ".");
+		if (c.isEmpty()) return null;
+
+		// 去掉腾讯专用 r_ 实时前缀
+		String lower = c.toLowerCase();
+		if (lower.startsWith("r_")) {
+			lower = lower.substring(2);
+		}
+
+		String prefix = "";
+		String digitsPart;
+
+		if (lower.startsWith("hk") || lower.startsWith("sh") || lower.startsWith("sz") || lower.startsWith("bj")) {
+			prefix = lower.substring(0, 2);
+			digitsPart = lower.substring(2);
+		} else if (lower.contains(".")) {
+			// 00700.HK 形式
+			String[] parts = lower.split("\\.");
+			digitsPart = parts[0];
+			if (parts.length >= 2 && parts[parts.length - 1].equals("hk")) {
+				prefix = "hk";
+			}
+		} else {
+			digitsPart = lower;
+		}
+
+		String digits = digitsPart.replaceAll("\\D+", "");
+		if (digits.isEmpty()) return null;
+
+		if (prefix.equals("hk") || digits.length() <= 5) {
+			// 港股：统一为 hk + 5位数字（补齐前导0）
+			if (digits.length() < 5) {
+				digits = String.format("%05d", Integer.parseInt(digits));
+			} else if (digits.length() > 5) {
+				digits = digits.substring(digits.length() - 5);
+			}
+			return "hk" + digits;
+		}
+
+		// 6位数字：A股，保留原有市场前缀（纯数字则按规则推断）
+		if (prefix.isEmpty()) {
+			if (digits.startsWith("6")) prefix = "sh";
+			else if (digits.startsWith("4") || digits.startsWith("8") || digits.startsWith("920")) prefix = "bj";
+			else prefix = "sz";
+		}
+		return prefix + digits;
+	}
+
 	public static AlarmInfo compareAllStocks(StockMng stockMng, List<SinaStockInfo> stockinfo, MaPriceMng maMng, MaAlarmLogMng maAlarmLogMng ) {
 		try{
 			List<StockMng> listStocks = stockMng.getStocks();
@@ -435,17 +493,21 @@ class Compare extends AsyncTask<StockMng, TextView, List<SinaStockInfo>>{
 
 			// 按股票代码建立映射，支持任意「待检查代码子集」（如港股延长时段只查港股），
 			// 避免依赖 stockinfo 与 listStocks 顺序一一对应。
+			// 同时对港股/A股代码做归一化（02587 与 hk2587 统一为 hk02587），彻底杜绝错配。
 			Map<String, SinaStockInfo> infoByCode = new HashMap<String, SinaStockInfo>();
 			for (SinaStockInfo si : stockinfo) {
 				if (si != null && si.getCode() != null) {
-					infoByCode.put(si.getCode().toLowerCase(), si);
+					String key = normalizeCodeKey(si.getCode());
+					if (key != null) {
+						infoByCode.put(key, si);
+					}
 				}
 			}
 
 			for (int i = 0; i < listStocks.size(); i++) {
 				StockMng stock = listStocks.get(i);
 				if (!stock.IsValid()) continue;
-				SinaStockInfo stock1 = infoByCode.get(stock.GetCode().toLowerCase());
+				SinaStockInfo stock1 = infoByCode.get(normalizeCodeKey(stock.GetCode()));
 				if (stock1 == null) continue;
 				int ret = stock.Compare(stock1.getNowPrice(), stock1.getYestodayPrice());
 				if (CMP_RESULT_NONE != ret) {
