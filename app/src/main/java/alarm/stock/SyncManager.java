@@ -150,6 +150,7 @@ public class SyncManager {
                 // 同步 MA 数据
                 List<SyncClient.SyncMaPrice> mas = client.getMaPrices();
                 applyServerMas(mas);
+                syncMaAlarmSettings();
                 postMsg("已从云端同步 " + (result.stocks != null ? result.stocks.size() : 0) + " 支股票");
             } else {
                 // 本地有数据 -> 上传合并，再以服务器结果覆盖本地
@@ -172,6 +173,7 @@ public class SyncManager {
                     List<SyncClient.SyncStock> merged = client.uploadStocks(toUpload);
                     applyServerStocks(merged, true);
                     Log.i(TAG, "上传合并完成，共 " + (merged != null ? merged.size() : 0) + " 支");
+                    syncMaAlarmSettings();
                     postMsg("同步完成：" + (merged != null ? merged.size() : 0) + " 支股票");
                 }
             }
@@ -355,6 +357,7 @@ public class SyncManager {
             SyncClient.SyncStockResult result = client.getStocks();
             handleClearStockIfNeeded(result.clearStock);
             applyServerStocks(result.stocks, true);
+            syncMaAlarmSettings();
             return true;
         } catch (SyncClient.SyncUnauthorizedException e) {
             // 登录态失效：SyncClient 已清除登录态并触发重新登录引导，无需额外处理
@@ -367,6 +370,45 @@ public class SyncManager {
             return false;
         } finally {
             syncing.set(false);
+        }
+    }
+
+    /**
+     * 同步均线预警全局开关（双向 LWW）：
+     *  1. 先上传本地值+本地 ts（旧值不会覆盖服务器新值，LWW 由服务端判定）；
+     *  2. 再下载服务器值，若服务器 ts > 本地 ts，则写入本地并广播，让前台/后台立即生效。
+     * 需在子线程调用；异常不抛出（同步开关失败不影响主流程）。
+     */
+    private void syncMaAlarmSettings() {
+        try {
+            boolean localEnabled = SettingsActivity.getMaAlarmEnabled(context);
+            long localTs = SettingsActivity.getMaAlarmEnabledTs(context);
+
+            // 1. 上传本地值（LWW：本地旧值不会覆盖服务器新值）
+            try {
+                client.uploadMaAlarmSettings(localEnabled, localTs);
+            } catch (Exception e) {
+                Log.w(TAG, "上传均线开关失败: " + e.getMessage());
+            }
+
+            // 2. 下载服务器值，服务器更新则覆盖本地并广播
+            SyncClient.MaAlarmSettings server = client.getMaAlarmSettings();
+            if (server != null && server.lastModified > localTs) {
+                SettingsActivity.setMaAlarmEnabled(context, server.enabled, server.lastModified);
+                Log.i(TAG, "均线开关已从服务器更新: enabled=" + server.enabled + ", ts=" + server.lastModified);
+                try {
+                    android.content.Intent intent = new android.content.Intent(ACTION_SYNC_DATA_CHANGED)
+                            .putExtra(EXTRA_ADDED, 0)
+                            .putExtra(EXTRA_MODIFIED, 1)
+                            .putExtra(EXTRA_REMOVED, 0);
+                    androidx.localbroadcastmanager.content.LocalBroadcastManager.getInstance(context)
+                            .sendBroadcast(intent);
+                } catch (Throwable t) {
+                    Log.w(TAG, "广播均线开关变更失败: " + t.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "同步均线开关异常: " + e.getMessage());
         }
     }
 

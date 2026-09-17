@@ -39,6 +39,8 @@ public class SettingsActivity extends Activity {
 	private static final String PREF_VIBRATE = "pref_vibrate";
 	private static final String PREF_RINGTONE_URI = "pref_ringtone_uri";
 	private static final String PREF_COLORFUL_LIST = "pref_colorful_list";
+	private static final String PREF_MA_ALARM_ENABLED = "pref_ma_alarm_enabled";
+	private static final String PREF_MA_ALARM_ENABLED_TS = "pref_ma_alarm_enabled_ts";
 	private static final int REQUEST_CODE_RINGTONE = 1001;
 	private static final String FEEDBACK_URL_PRIMARY = "http://www.yanhexing.com:9000/stock_alarm/soft_dev";
 	private static final String FEEDBACK_URL_FALLBACK = "http://47.107.180.174:9000/stock_alarm/soft_dev";
@@ -54,16 +56,8 @@ public class SettingsActivity extends Activity {
 	private TextView textSubmitStatus;
 	private SharedPreferences prefs;
 
-	// 均线预警设置
-	private static final int[] MA_DISPLAY_PERIODS = {5, 10, 20, 30, 60, 120, 250};
-	private Spinner spinnerMaStock;
-	private Button btnSaveMa;
-	private ArrayList<String> maStockLabels;   // 显示 "代码 名称"
-	private ArrayList<String> maStockCodes;    // 对应代码
-	private StockSQLite maSqlite;
-	private MaPriceMng maPriceMng;
-	private RadioGroup[] maRadioGroups;        // 每个周期一行（开启/关闭）
-	private EditText[] maEditTexts;            // 每个周期价格输入框
+	// 均线预警设置（全局开关）
+	private CheckBox checkMaAlarm;
 	
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -152,147 +146,63 @@ public class SettingsActivity extends Activity {
 	}
 
 	/**
-	 * 均线预警设置：初始化股票下拉框、7条均线输入行、保存按钮逻辑。
+	 * 均线预警设置（全局开关）：勾选=所有股票都做均线预警，不勾选=都不做。
+	 * 均线价格由 MaDownloader 按每只股票自动下载计算，无需用户手填。
 	 */
 	private void setupMaPriceSettings() {
-		spinnerMaStock = (Spinner) findViewById(R.id.spinner_ma_stock);
-		btnSaveMa = (Button) findViewById(R.id.btn_save_ma);
-		if (spinnerMaStock == null || btnSaveMa == null) {
+		checkMaAlarm = (CheckBox) findViewById(R.id.check_ma_alarm);
+		if (checkMaAlarm == null) {
 			return;
 		}
-
-		maStockLabels = new ArrayList<String>();
-		maStockCodes = new ArrayList<String>();
-		maSqlite = new StockSQLite(this);
-		maPriceMng = new MaPriceMng(maSqlite);
-
-		// 关联每个周期的 RadioGroup 与 EditText（下标与 MA_DISPLAY_PERIODS 一一对应）
-		final int[] groupIds = {R.id.ma_radio_group_5, R.id.ma_radio_group_10, R.id.ma_radio_group_20,
-			R.id.ma_radio_group_30, R.id.ma_radio_group_60, R.id.ma_radio_group_120, R.id.ma_radio_group_250};
-		final int[] editIds  = {R.id.ma_edit_5, R.id.ma_edit_10, R.id.ma_edit_20,
-			R.id.ma_edit_30, R.id.ma_edit_60, R.id.ma_edit_120, R.id.ma_edit_250};
-		maRadioGroups = new RadioGroup[MA_DISPLAY_PERIODS.length];
-		maEditTexts = new EditText[MA_DISPLAY_PERIODS.length];
-		for (int i = 0; i < MA_DISPLAY_PERIODS.length; i++) {
-			maRadioGroups[i] = (RadioGroup) findViewById(groupIds[i]);
-			maEditTexts[i] = (EditText) findViewById(editIds[i]);
-		}
-
-		// 读取数据库所有股票（代码 名称）
-		SQLiteDatabase db = maSqlite.getReadableDatabase();
-		Cursor cursor = null;
-		try {
-			cursor = db.query(Constants.TABLE_NAME,
-				new String[]{Constants.F_CODE, Constants.F_NAME},
-				null, null, null, null, null);
-			if (cursor != null) {
-				while (cursor.moveToNext()) {
-					String code = cursor.getString(0);
-					String name = cursor.getString(1);
-					maStockCodes.add(code);
-					maStockLabels.add(code + " " + name);
-				}
-			}
-		} catch (Exception e) {
-			Log.e("Settings", "加载股票列表失败: " + e.getMessage(), e);
-		} finally {
-			if (cursor != null) cursor.close();
-		}
-
-		ArrayAdapter<String> adapter = new ArrayAdapter<String>(this,
-				android.R.layout.simple_spinner_item, maStockLabels);
-		adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-		spinnerMaStock.setAdapter(adapter);
-
-		// 切换股票时回填均线价格
-		spinnerMaStock.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-			@Override
-			public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-				if (position < 0 || position >= maStockCodes.size()) return;
-				String code = maStockCodes.get(position);
-				float[] prices = maPriceMng.getMaPrices(code);
-				fillMaPrices(prices);
-			}
-
-			@Override
-			public void onNothingSelected(AdapterView<?> parent) {
-			}
-		});
-
-		// 保存按钮
-		btnSaveMa.setOnClickListener(new View.OnClickListener() {
+		// 加载保存的开关状态，默认开启（保持原有行为）
+		checkMaAlarm.setChecked(getMaAlarmEnabled(this));
+		checkMaAlarm.setOnClickListener(new View.OnClickListener() {
 			@Override
 			public void onClick(View v) {
-				saveMaPrices();
+				saveMaAlarmSetting(checkMaAlarm.isChecked());
 			}
 		});
 	}
 
-	/**
-	 * 将某股票的均线价格回填到界面（-1 表示未启用，%.2f 显示）。
-	 */
-	private void fillMaPrices(float[] prices) {
-		if (maRadioGroups == null || maEditTexts == null || prices == null) return;
-		for (int i = 0; i < MA_DISPLAY_PERIODS.length && i < prices.length; i++) {
-			float p = prices[i];
-			RadioGroup group = maRadioGroups[i];
-			EditText edit = maEditTexts[i];
-			int onId = (i == 0) ? R.id.ma_radio_on_5
-				: (i == 1) ? R.id.ma_radio_on_10
-				: (i == 2) ? R.id.ma_radio_on_20
-				: (i == 3) ? R.id.ma_radio_on_30
-				: (i == 4) ? R.id.ma_radio_on_60
-				: (i == 5) ? R.id.ma_radio_on_120
-				: R.id.ma_radio_on_250;
-			if (p > 0) {
-				group.check(onId);
-				edit.setText(String.format("%.2f", p));
-			} else {
-				group.clearCheck();
-				edit.setText("");
-			}
-		}
+	private void saveMaAlarmSetting(boolean enabled) {
+		final long ts = System.currentTimeMillis();
+		SharedPreferences.Editor editor = prefs.edit();
+		editor.putBoolean(PREF_MA_ALARM_ENABLED, enabled);
+		editor.putLong(PREF_MA_ALARM_ENABLED_TS, ts);
+		editor.apply();
+		Toast.makeText(this, enabled ? "已启用均线预警" : "已关闭均线预警", Toast.LENGTH_SHORT).show();
+		// 立即在后台线程上传到服务器（已登录同步时才传），失败静默重试一次，不阻塞 UI
+		uploadMaAlarmSettingAsync(enabled, ts);
 	}
 
 	/**
-	 * 保存当前选中股票的均线设置：开启且价格>0 存价格，否则存 -1。
+	 * 后台线程上传均线全局开关到服务端（LWW）。未登录则跳过；失败静默重试一次。
 	 */
-	private void saveMaPrices() {
-		int position = spinnerMaStock.getSelectedItemPosition();
-		if (position < 0 || position >= maStockCodes.size()) {
-			Toast.makeText(this, "请先选择股票", Toast.LENGTH_SHORT).show();
-			return;
-		}
-		String code = maStockCodes.get(position);
-		float[] prices = new float[MA_DISPLAY_PERIODS.length];
-		for (int i = 0; i < MA_DISPLAY_PERIODS.length; i++) {
-			RadioGroup group = maRadioGroups[i];
-			EditText edit = maEditTexts[i];
-			int onId = (i == 0) ? R.id.ma_radio_on_5
-				: (i == 1) ? R.id.ma_radio_on_10
-				: (i == 2) ? R.id.ma_radio_on_20
-				: (i == 3) ? R.id.ma_radio_on_30
-				: (i == 4) ? R.id.ma_radio_on_60
-				: (i == 5) ? R.id.ma_radio_on_120
-				: R.id.ma_radio_on_250;
-			boolean enabled = group != null && group.getCheckedRadioButtonId() == onId;
-			float price = 0;
-			if (edit != null && edit.getText() != null) {
+	private void uploadMaAlarmSettingAsync(final boolean enabled, final long ts) {
+		new Thread(new Runnable() {
+			@Override
+			public void run() {
 				try {
-					price = Float.parseFloat(edit.getText().toString().trim());
-				} catch (Exception e) {
-					price = 0;
+					SyncClient client = new SyncClient(SettingsActivity.this);
+					if (!client.isLoggedIn()) return;
+					try {
+						client.uploadMaAlarmSettings(enabled, ts);
+					} catch (Exception e1) {
+						Log.w("Settings", "上传均线开关失败，重试一次: " + e1.getMessage());
+						try {
+							Thread.sleep(2000);
+							client.uploadMaAlarmSettings(enabled, ts);
+						} catch (Exception e2) {
+							Log.w("Settings", "上传均线开关重试仍失败: " + e2.getMessage());
+						}
+					}
+				} catch (Throwable t) {
+					Log.w("Settings", "上传均线开关异常: " + t.getMessage());
 				}
 			}
-			if (enabled && price > 0) {
-				prices[i] = price;
-			} else {
-				prices[i] = -1f;
-			}
-		}
-		maPriceMng.saveMaPrices(code, prices);
-		Toast.makeText(this, "均线已更新", Toast.LENGTH_SHORT).show();
+		}).start();
 	}
+
 
 	private void submitFeedback() {
 		if (editFeedback == null || btnSubmitFeedback == null) {
@@ -772,6 +682,33 @@ public class SettingsActivity extends Activity {
 	public static boolean getColorfulListEnabled(android.content.Context context) {
 		SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
 		return prefs.getBoolean(PREF_COLORFUL_LIST, true);
+	}
+
+	/**
+	 * 获取均线预警全局开关：true=对所有股票做均线预警，false=都不做。默认 true。
+	 */
+	public static boolean getMaAlarmEnabled(android.content.Context context) {
+		SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+		return prefs.getBoolean(PREF_MA_ALARM_ENABLED, true);
+	}
+
+	/**
+	 * 获取均线预警全局开关的本地最后修改时间戳（毫秒）。无记录返回 0。
+	 */
+	public static long getMaAlarmEnabledTs(android.content.Context context) {
+		SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+		return prefs.getLong(PREF_MA_ALARM_ENABLED_TS, 0L);
+	}
+
+	/**
+	 * 写入均线预警全局开关 + 时间戳（用于跨端同步写入，不触发上传）。
+	 */
+	public static void setMaAlarmEnabled(android.content.Context context, boolean enabled, long ts) {
+		SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+		prefs.edit()
+			.putBoolean(PREF_MA_ALARM_ENABLED, enabled)
+			.putLong(PREF_MA_ALARM_ENABLED_TS, ts)
+			.apply();
 	}
 
 	/**

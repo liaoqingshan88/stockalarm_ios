@@ -248,6 +248,53 @@ public class SyncClient {
         }
     }
 
+    // ==================== 全局设置（均线预警总开关） ====================
+
+    /** 均线预警总开关设置 */
+    public static class MaAlarmSettings {
+        public boolean enabled;
+        public long lastModified;
+    }
+
+    /**
+     * 获取均线预警总开关设置。服务端无记录时返回 null。
+     */
+    public MaAlarmSettings getMaAlarmSettings() throws Exception {
+        JSONObject resp = get("/api/sync/settings", getToken());
+        if (!resp.optBoolean("success", false)) {
+            throw new SyncException(resp.optString("error", "获取设置失败"));
+        }
+        JSONObject s = resp.optJSONObject("settings");
+        if (s == null) return null;
+        MaAlarmSettings out = new MaAlarmSettings();
+        out.enabled = s.optBoolean("ma_alarm_enabled", true);
+        out.lastModified = s.optLong("last_modified", 0L);
+        return out;
+    }
+
+    /**
+     * 上传均线预警总开关（LWW，由服务端判定）。返回服务端最终生效值。
+     */
+    public MaAlarmSettings uploadMaAlarmSettings(boolean enabled, long ts) throws Exception {
+        JSONObject body = new JSONObject();
+        body.put("ma_alarm_enabled", enabled);
+        body.put("last_modified", ts);
+        JSONObject resp = post("/api/sync/settings", body, getToken());
+        if (!resp.optBoolean("success", false)) {
+            throw new SyncException(resp.optString("error", "上传设置失败"));
+        }
+        JSONObject s = resp.optJSONObject("settings");
+        MaAlarmSettings out = new MaAlarmSettings();
+        if (s != null) {
+            out.enabled = s.optBoolean("ma_alarm_enabled", enabled);
+            out.lastModified = s.optLong("last_modified", ts);
+        } else {
+            out.enabled = enabled;
+            out.lastModified = ts;
+        }
+        return out;
+    }
+
     // ==================== 报警日志 ====================
 
     /**
