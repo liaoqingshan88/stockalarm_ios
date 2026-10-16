@@ -140,7 +140,8 @@ struct OcrImportView: View {
         return await withCheckedContinuation { continuation in
             let request = VNRecognizeTextRequest { req, _ in
                 var lines: [String] = []
-                for obs in (req.results ?? []) {
+                let results = req.results as? [VNRecognizedTextObservation] ?? []
+                for obs in results {
                     if let line = obs.topCandidates(1).first {
                         lines.append(line.string)
                     }

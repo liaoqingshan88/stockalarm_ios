@@ -34,15 +34,18 @@ final class AppModel: ObservableObject {
         }
 
         SyncManager.shared.onSyncMessage = { [weak self] msg in
-            Task { @MainActor in self?.lastSyncMessage = msg }
+            guard let self = self else { return }
+            Task { @MainActor in self.lastSyncMessage = msg }
         }
         SyncManager.shared.onDataChanged = { [weak self] in
-            Task { @MainActor in self?.reload() }
+            guard let self = self else { return }
+            Task { @MainActor in self.reload() }
         }
         SyncManager.shared.onSessionExpired = { [weak self] msg in
+            guard let self = self else { return }
             Task { @MainActor in
-                self?.lastSyncMessage = msg
-                self?.syncStarted = false
+                self.lastSyncMessage = msg
+                self.syncStarted = false
             }
         }
     }
@@ -70,7 +73,8 @@ final class AppModel: ObservableObject {
     private func startPolling() {
         pollTimer?.invalidate()
         pollTimer = Timer.scheduledTimer(withTimeInterval: AppConstants.quotePollIntervalTrade, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.pollOnce() }
+            guard let self = self else { return }
+            Task { @MainActor in self.pollOnce() }
         }
     }
 

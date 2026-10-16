@@ -39,12 +39,13 @@ enum AppConstants {
 }
 
 extension Color {
-    init(hex: UInt, alpha: Double = 1) {
+    init(hex: Int, alpha: Double = 1) {
+        let h = UInt(hex)
         self.init(
             .sRGB,
-            red: Double((hex >> 16) & 0xFF) / 255,
-            green: Double((hex >> 8) & 0xFF) / 255,
-            blue: Double(hex & 0xFF) / 255,
+            red: Double((h >> 16) & 0xFF) / 255,
+            green: Double((h >> 8) & 0xFF) / 255,
+            blue: Double(h & 0xFF) / 255,
             opacity: alpha
         )
     }

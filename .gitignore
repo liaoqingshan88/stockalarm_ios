@@ -29,3 +29,5 @@ vssver.scc
 .token
 dist/
 repo_test/
+run.json
+logs.zip

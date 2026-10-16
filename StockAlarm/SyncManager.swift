@@ -165,9 +165,7 @@ final class SyncManager {
     private func collectLocalStocks() -> [SyncClient.SyncStock] {
         var out: [SyncClient.SyncStock] = []
         for s in store.getStocks() {
-            if queue.sync(operation: { serverDeletedCodes.contains(s.code) }) {
-                continue
-            }
+            if queue.sync(execute: { serverDeletedCodes.contains(s.code) }) { continue }
             var sync = SyncClient.SyncStock()
             sync.code = s.code
             sync.name = s.name
@@ -178,7 +176,7 @@ final class SyncManager {
             sync.valid = s.valid ? 1 : 0
             let ts = store.localTimestamp(code: s.code)
             sync.lastModified = ts > 0 ? ts : Int64(Date().timeIntervalSince1970 * 1000)
-            out.add(sync)
+            out.append(sync)
         }
         return out
     }

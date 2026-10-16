@@ -58,8 +58,8 @@ enum StockTime {
 
     /// 判断股票代码是否为港股
     static func isHkStock(_ code: String?) -> Bool {
-        guard let code = code, !code.isEmpty else { return false }
-        let lower = code.trim().lowercased()
+        guard let code = code?.trimmingCharacters(in: .whitespaces), !code.isEmpty else { return false }
+        let lower = code.lowercased()
         if lower.hasPrefix("hk") { return true }
         if lower.hasSuffix(".hk") { return true }
         let digits = lower.filter { $0.isNumber }
