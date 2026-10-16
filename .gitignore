@@ -1,24 +1,31 @@
-# Build
-/build/
-/app/build/
-/.gradle/
-*.apk
-*.ap_
-*.dex
-
-# IDE
-*.iml
-.idea/
-local.properties
-
-# OS
+# macOS
 .DS_Store
-Thumbs.db
 
-# Keystore (安全相关，不提交)
-keystore.properties
-*.jks
-*.keystore
+# Xcode / DerivedData
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcuserdatad/
 
-# Local temp/backup (不提交)
-tmp/
+# 构建产物
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager（本工程不用）
+.build/
+.swiftpm/
+
+# 编辑器
+.idea/
+.vscode/
+*.swp
+# 本机杂物
+hs_err_pid*.log
+replay_pid*.log
+*.bak
+vssver.scc
+.token
+dist/
+repo_test/

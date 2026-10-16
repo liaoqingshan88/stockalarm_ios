@@ -1,0 +1,498 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+		000000000000000000000001 /* PBXFileReference */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = AlarmHistoryView.swift;
+			path = AlarmHistoryView.swift;
+			sourceTree = "<group>";
+		};
+		000000000000000000000002 /* PBXFileReference */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = AlarmNotifier.swift;
+			path = AlarmNotifier.swift;
+			sourceTree = "<group>";
+		};
+		000000000000000000000003 /* PBXFileReference */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = AppModel.swift;
+			path = AppModel.swift;
+			sourceTree = "<group>";
+		};
+		000000000000000000000004 /* PBXFileReference */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = AppSettings.swift;
+			path = AppSettings.swift;
+			sourceTree = "<group>";
+		};
+		000000000000000000000005 /* PBXFileReference */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = CompareEngine.swift;
+			path = CompareEngine.swift;
+			sourceTree = "<group>";
+		};
+		000000000000000000000006 /* PBXFileReference */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = Constants.swift;
+			path = Constants.swift;
+			sourceTree = "<group>";
+		};
+		000000000000000000000007 /* PBXFileReference */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = HelpView.swift;
+			path = HelpView.swift;
+			sourceTree = "<group>";
+		};
+		000000000000000000000008 /* PBXFileReference */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = MaDownloader.swift;
+			path = MaDownloader.swift;
+			sourceTree = "<group>";
+		};
+		000000000000000000000009 /* PBXFileReference */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = MainView.swift;
+			path = MainView.swift;
+			sourceTree = "<group>";
+		};
+		00000000000000000000000A /* PBXFileReference */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = Models.swift;
+			path = Models.swift;
+			sourceTree = "<group>";
+		};
+		00000000000000000000000B /* PBXFileReference */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = OcrImportView.swift;
+			path = OcrImportView.swift;
+			sourceTree = "<group>";
+		};
+		00000000000000000000000C /* PBXFileReference */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = PeakValleyTracker.swift;
+			path = PeakValleyTracker.swift;
+			sourceTree = "<group>";
+		};
+		00000000000000000000000D /* PBXFileReference */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = Quote.swift;
+			path = Quote.swift;
+			sourceTree = "<group>";
+		};
+		00000000000000000000000E /* PBXFileReference */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = QuoteClient.swift;
+			path = QuoteClient.swift;
+			sourceTree = "<group>";
+		};
+		00000000000000000000000F /* PBXFileReference */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = SettingsView.swift;
+			path = SettingsView.swift;
+			sourceTree = "<group>";
+		};
+		000000000000000000000010 /* PBXFileReference */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = StockAlarmApp.swift;
+			path = StockAlarmApp.swift;
+			sourceTree = "<group>";
+		};
+		000000000000000000000011 /* PBXFileReference */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = StockEditView.swift;
+			path = StockEditView.swift;
+			sourceTree = "<group>";
+		};
+		000000000000000000000012 /* PBXFileReference */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = StockTime.swift;
+			path = StockTime.swift;
+			sourceTree = "<group>";
+		};
+		000000000000000000000013 /* PBXFileReference */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = SyncClient.swift;
+			path = SyncClient.swift;
+			sourceTree = "<group>";
+		};
+		000000000000000000000014 /* PBXFileReference */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = SyncLoginView.swift;
+			path = SyncLoginView.swift;
+			sourceTree = "<group>";
+		};
+		000000000000000000000015 /* PBXFileReference */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = SyncManager.swift;
+			path = SyncManager.swift;
+			sourceTree = "<group>";
+		};
+		000000000000000000000016 /* PBXFileReference */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = UpdateChecker.swift;
+			path = UpdateChecker.swift;
+			sourceTree = "<group>";
+		};
+		000000000000000000000017 /* PBXFileReference */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = folder.assetcatalog;
+			name = Assets.xcassets;
+			path = Resources/Assets.xcassets;
+			sourceTree = "<group>";
+		};
+		000000000000000000000018 /* PBXFileReference */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.xml;
+			name = PrivacyInfo.xcprivacy;
+			path = Resources/PrivacyInfo.xcprivacy;
+			sourceTree = "<group>";
+		};
+		000000000000000000000019 /* PBXFileReference */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.xml;
+			name = Info.plist;
+			path = Info.plist;
+			sourceTree = "<group>";
+		};
+		00000000000000000000001A /* PBXFileReference */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.entitlements;
+			name = StockAlarm.entitlements;
+			path = StockAlarm.entitlements;
+			sourceTree = "<group>";
+		};
+		00000000000000000000001B /* PBXFileReference */ = {
+			isa = PBXFileReference;
+			explicitFileType = wrapper.application;
+			includeInIndex = 0;
+			path = StockAlarm.app;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		00000000000000000000001C /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = 000000000000000000000001;
+		};
+		00000000000000000000001D /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = 000000000000000000000002;
+		};
+		00000000000000000000001E /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = 000000000000000000000003;
+		};
+		00000000000000000000001F /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = 000000000000000000000004;
+		};
+		000000000000000000000020 /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = 000000000000000000000005;
+		};
+		000000000000000000000021 /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = 000000000000000000000006;
+		};
+		000000000000000000000022 /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = 000000000000000000000007;
+		};
+		000000000000000000000023 /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = 000000000000000000000008;
+		};
+		000000000000000000000024 /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = 000000000000000000000009;
+		};
+		000000000000000000000025 /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = 00000000000000000000000A;
+		};
+		000000000000000000000026 /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = 00000000000000000000000B;
+		};
+		000000000000000000000027 /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = 00000000000000000000000C;
+		};
+		000000000000000000000028 /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = 00000000000000000000000D;
+		};
+		000000000000000000000029 /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = 00000000000000000000000E;
+		};
+		00000000000000000000002A /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = 00000000000000000000000F;
+		};
+		00000000000000000000002B /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = 000000000000000000000010;
+		};
+		00000000000000000000002C /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = 000000000000000000000011;
+		};
+		00000000000000000000002D /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = 000000000000000000000012;
+		};
+		00000000000000000000002E /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = 000000000000000000000013;
+		};
+		00000000000000000000002F /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = 000000000000000000000014;
+		};
+		000000000000000000000030 /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = 000000000000000000000015;
+		};
+		000000000000000000000031 /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = 000000000000000000000016;
+		};
+		000000000000000000000032 /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = 000000000000000000000017;
+		};
+		000000000000000000000033 /* PBXBuildFile */ = {
+			isa = PBXBuildFile;
+			fileRef = 000000000000000000000018;
+		};
+		000000000000000000000034 /* PBXGroup */ = {
+			isa = PBXGroup;
+			children = (000000000000000000000001 /* AlarmHistoryView.swift */, 000000000000000000000002 /* AlarmNotifier.swift */, 000000000000000000000003 /* AppModel.swift */, 000000000000000000000004 /* AppSettings.swift */, 000000000000000000000005 /* CompareEngine.swift */, 000000000000000000000006 /* Constants.swift */, 000000000000000000000007 /* HelpView.swift */, 000000000000000000000008 /* MaDownloader.swift */, 000000000000000000000009 /* MainView.swift */, 00000000000000000000000A /* Models.swift */, 00000000000000000000000B /* OcrImportView.swift */, 00000000000000000000000C /* PeakValleyTracker.swift */, 00000000000000000000000D /* Quote.swift */, 00000000000000000000000E /* QuoteClient.swift */, 00000000000000000000000F /* SettingsView.swift */, 000000000000000000000010 /* StockAlarmApp.swift */, 000000000000000000000011 /* StockEditView.swift */, 000000000000000000000012 /* StockTime.swift */, 000000000000000000000013 /* SyncClient.swift */, 000000000000000000000014 /* SyncLoginView.swift */, 000000000000000000000015 /* SyncManager.swift */, 000000000000000000000016 /* UpdateChecker.swift */, 000000000000000000000017 /* Assets.xcassets */, 000000000000000000000018 /* PrivacyInfo.xcprivacy */, 000000000000000000000019 /* Info.plist */, 00000000000000000000001A /* StockAlarm.entitlements */);
+			path = StockAlarm;
+			sourceTree = "<group>";
+		};
+		000000000000000000000035 /* PBXGroup */ = {
+			isa = PBXGroup;
+			children = (00000000000000000000001B /* StockAlarm.app */);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		000000000000000000000036 /* PBXGroup */ = {
+			isa = PBXGroup;
+			children = (000000000000000000000034 /* StockAlarm */, 000000000000000000000035 /* Products */);
+			sourceTree = "<group>";
+		};
+		000000000000000000000037 /* PBXSourcesBuildPhase */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (00000000000000000000001C /* AlarmHistoryView.swift */, 00000000000000000000001D /* AlarmNotifier.swift */, 00000000000000000000001E /* AppModel.swift */, 00000000000000000000001F /* AppSettings.swift */, 000000000000000000000020 /* CompareEngine.swift */, 000000000000000000000021 /* Constants.swift */, 000000000000000000000022 /* HelpView.swift */, 000000000000000000000023 /* MaDownloader.swift */, 000000000000000000000024 /* MainView.swift */, 000000000000000000000025 /* Models.swift */, 000000000000000000000026 /* OcrImportView.swift */, 000000000000000000000027 /* PeakValleyTracker.swift */, 000000000000000000000028 /* Quote.swift */, 000000000000000000000029 /* QuoteClient.swift */, 00000000000000000000002A /* SettingsView.swift */, 00000000000000000000002B /* StockAlarmApp.swift */, 00000000000000000000002C /* StockEditView.swift */, 00000000000000000000002D /* StockTime.swift */, 00000000000000000000002E /* SyncClient.swift */, 00000000000000000000002F /* SyncLoginView.swift */, 000000000000000000000030 /* SyncManager.swift */, 000000000000000000000031 /* UpdateChecker.swift */);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		000000000000000000000038 /* PBXResourcesBuildPhase */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (000000000000000000000032 /* Assets.xcassets */, 000000000000000000000033 /* PrivacyInfo.xcprivacy */);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		000000000000000000000039 /* PBXFrameworksBuildPhase */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = ();
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		00000000000000000000003C /* XCConfigurationList */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (00000000000000000000003A, 00000000000000000000003B);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		00000000000000000000003F /* XCConfigurationList */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (00000000000000000000003D, 00000000000000000000003E);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		000000000000000000000040 /* PBXNativeTarget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 00000000000000000000003F;
+			buildPhases = (000000000000000000000037, 000000000000000000000039, 000000000000000000000038);
+			buildRules = ();
+			dependencies = ();
+			name = StockAlarm;
+			productName = StockAlarm;
+			productReference = 00000000000000000000001B /* StockAlarm.app */;
+			productType = "com.apple.product-type.application";
+		};
+		000000000000000000000041 /* PBXProject */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					000000000000000000000040 = { CreatedOnToolsVersion = 15.0; };
+				};
+			};
+			buildConfigurationList = 00000000000000000000003C;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = zh_CN;
+			hasScannedForEncodings = 0;
+			knownRegions = (zh-Hans, en, Base);
+			mainGroup = 000000000000000000000036;
+			productRefGroup = 000000000000000000000035 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (000000000000000000000040 /* StockAlarm */);
+		};
+		00000000000000000000003A /* XCBuildConfiguration */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				COPY_PHASE_STRIP = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				SDKROOT = iphoneos;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = ("DEBUG=1", "$(inherited)");
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		00000000000000000000003B /* XCBuildConfiguration */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				COPY_PHASE_STRIP = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				SDKROOT = iphoneos;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		00000000000000000000003D /* XCBuildConfiguration */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = StockAlarm/StockAlarm.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 362;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = StockAlarm/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks");
+				MARKETING_VERSION = 3.2.42;
+				PRODUCT_BUNDLE_IDENTIFIER = cn.yanhexing.stockalarm;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		00000000000000000000003E /* XCBuildConfiguration */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = StockAlarm/StockAlarm.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 362;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = StockAlarm/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks");
+				MARKETING_VERSION = 3.2.42;
+				PRODUCT_BUNDLE_IDENTIFIER = cn.yanhexing.stockalarm;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+	};
+	rootObject = 000000000000000000000041 /* Project object */;
+}

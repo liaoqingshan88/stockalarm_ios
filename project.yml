@@ -1,0 +1,50 @@
+# =====================================================================
+# 备选方案：用 XcodeGen 从 project.yml 生成 Xcode 工程
+#
+# 本仓库已带一份手写的 StockAlarm.xcodeproj（可直接用），不需要 XcodeGen。
+# 如果你更习惯用 yml 描述工程（例如要改 bundle id / 加文件），可以用本文件：
+#
+#   brew install xcodegen
+#   xcodegen generate    # 会根据 project.yml 重新生成 StockAlarm.xcodeproj
+#
+# 注意：XcodeGen 生成的是它自己的 pbxproj，会和 scripts/gen_xcodeproj.py
+# 生成的版本互相覆盖——二选一即可，别混用。
+# =====================================================================
+name: StockAlarm
+options:
+  bundleIdPrefix: cn.yanhexing
+  deploymentTarget:
+    iOS: "15.0"
+  xcodeVersion: "15.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "3.2.42"
+    CURRENT_PROJECT_VERSION: "362"
+targets:
+  StockAlarm:
+    type: application
+    platform: iOS
+    sources:
+      - path: StockAlarm
+        excludes:
+          - "Info.plist"
+          - "StockAlarm.entitlements"
+          - "Resources/*"
+    info:
+      path: StockAlarm/Info.plist
+    entitlements:
+      path: StockAlarm/StockAlarm.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: cn.yanhexing.stockalarm
+        GENERATE_INFOPLIST_FILE: "NO"
+        INFOPLIST_FILE: StockAlarm/Info.plist
+        CODE_SIGN_STYLE: Automatic
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ENABLE_USER_SCRIPT_SANDBOXING: "NO"
+    resources:
+      - path: StockAlarm/Resources/Assets.xcassets
+      - path: StockAlarm/Resources/PrivacyInfo.xcprivacy
